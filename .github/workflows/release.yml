@@ -3,10 +3,11 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - 'v*.*.*'         # se ejecuta cuando empujas un tag vX.Y.Z
+  workflow_dispatch:      # permite lanzarla manualmente desde Actions
 
 permissions:
-  contents: write
+  contents: write         # imprescindible para crear/publicar Releases
 
 jobs:
   build:
@@ -14,9 +15,8 @@ jobs:
     timeout-minutes: 40
 
     env:
-      # Mirror para Electron (evita 504 de github.com/electron)
+      # Mirror + cache para evitar 5xx al bajar Electron
       ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
-      # Directorios de cache (usados por electron, electron-builder y app-builder)
       ELECTRON_CACHE: ${{ runner.temp }}\.cache\electron
       ELECTRON_BUILDER_CACHE: ${{ runner.temp }}\.cache\electron-builder
       APP_BUILDER_CACHE: ${{ runner.temp }}\.cache\app-builder
@@ -25,6 +25,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Debug ref
+        run: |
+          echo "ref=$env:GITHUB_REF"
+          echo "ref_type=$env:GITHUB_REF_TYPE"
+          echo "ref_name=$env:GITHUB_REF_NAME"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -42,18 +48,32 @@ jobs:
           key: ${{ runner.os }}-electron-cache-${{ hashFiles('package-lock.json') }}
 
       - name: Install deps
-        run: npm install
+        run: |
+          if (Test-Path "package-lock.json") { npm ci } else { npm install }
 
-      # Reintentos automáticos del paso de build/publicación (por si el mirror/CDN falla)
-      - name: Build & publish (retry)
+      - name: Build (no publish)
         uses: nick-fields/retry@v3
         with:
           max_attempts: 3
           timeout_minutes: 25
-          command: npm run dist -- -w --publish always
+          command: npm run dist -- -w --publish never
         env:
           ELECTRON_MIRROR: ${{ env.ELECTRON_MIRROR }}
           ELECTRON_CACHE: ${{ env.ELECTRON_CACHE }}
           ELECTRON_BUILDER_CACHE: ${{ env.ELECTRON_BUILDER_CACHE }}
           APP_BUILDER_CACHE: ${{ env.APP_BUILDER_CACHE }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}        # usa el tag (vX.Y.Z) si vino por push de tag; si fue manual, crea un draft
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.exe
+            dist/*.yml
+            dist/*.blockmap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
