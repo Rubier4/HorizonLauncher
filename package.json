@@ -76,9 +76,7 @@
       {
         "provider": "github",
         "owner": "Rubier4",
-        "repo": "HorizonLauncher",
-        "releaseType": "release",
-        "draft": false
+        "repo": "HorizonLauncher"
       }
     ]
   }
