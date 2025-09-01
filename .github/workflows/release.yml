@@ -1,0 +1,30 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Se ejecuta cuando haces push de un tag tipo v1.0.1
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build & publish release
+        run: npm run dist -- -w --publish always
+        env:
+          # Puedes usar el token automático de GitHub:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # O si prefieres un PAT clásico, crea el secret GH_TOKEN con tu token personal y usa:
+          # GH_TOKEN: ${{ secrets.GH_TOKEN }}
