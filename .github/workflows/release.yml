@@ -3,11 +3,10 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'   # se ejecuta cuando haces push de un tag vX.Y.Z
+      - 'v*.*.*'
 
-# Da permisos de escritura al GITHUB_TOKEN del workflow
 permissions:
-  contents: write
+  contents: write   # <- imprescindible para crear/actualizar Releases
 
 jobs:
   build:
@@ -23,11 +22,11 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      # Usa package-lock.json si lo tienes, si no cambia a "npm install"
+      # Usa "npm ci" si tienes package-lock.json committeado. Si no, cambia a npm install
       - name: Install deps
-        run: npm ci
+        run: npm install
 
       - name: Build & publish release
         run: npm run dist -- -w --publish always
         env:
-           GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # usa el token integrado (no crees secret propio)
