@@ -3,10 +3,10 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - 'v*.*.*'   # Se ejecuta solo al empujar un tag vX.Y.Z
 
 permissions:
-  contents: write
+  contents: write  # Imprescindible para crear la Release
 
 jobs:
   build:
@@ -16,17 +16,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Debug ref (opcional)
+        run: echo "ref=$GITHUB_REF type=$GITHUB_REF_TYPE name=$GITHUB_REF_NAME"
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
 
-      # Si NO tienes package-lock.json, usa npm install
+      # Si no tienes package-lock.json, usa npm install
       - name: Install deps
         run: npm install
 
       - name: Build & publish release
         run: npm run dist -- -w --publish always
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # usa el token integrado del workflow
