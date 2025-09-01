@@ -15,11 +15,10 @@ jobs:
     timeout-minutes: 40
 
     env:
-      
       ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
-      ELECTRON_CACHE: ${{ runner.temp }}\.cache\electron
-      ELECTRON_BUILDER_CACHE: ${{ runner.temp }}\.cache\electron-builder
-      APP_BUILDER_CACHE: ${{ runner.temp }}\.cache\app-builder
+      ELECTRON_CACHE: ${{ runner.tool_cache }}/electron
+      ELECTRON_BUILDER_CACHE: ${{ runner.tool_cache }}/electron-builder
+      APP_BUILDER_CACHE: ${{ runner.tool_cache }}/app-builder
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
