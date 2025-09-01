@@ -1,0 +1,63 @@
+# Node and package managers
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Lock files (opcional; elimina estas líneas si quieres versionarlas)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# IDE / editor
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts (Electron / electron-builder)
+dist/
+out/
+win-unpacked/
+release/
+*.7z
+*.zip
+*.dmg
+*.exe
+*.msi
+*.AppImage
+*.snap
+*.deb
+*.rpm
+*.pacman
+*.pkg
+*.blockmap
+latest*.yml
+
+# Build resources: ignora todo salvo los archivos que sí quieres versionar
+/build/*
+!/build/icon.ico
+!/build/installer.nsh
+
+# Caches y temporales
+.cache/
+.parcel-cache/
+temp/
+tmp/
+logs/
+*.log
+
+# Proyecto específico
+resources/regedit/
+downloads/
+GTAHorizon*/
+GTA Horizon*/
+
+# Variables de entorno
+.env
+.env.*.local

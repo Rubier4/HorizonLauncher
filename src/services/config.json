@@ -1,0 +1,21 @@
+{
+    "database": {
+        "host": "195.26.252.73",
+        "user": "launcher_user",
+        "password": "HorizonTEST",
+        "database": "samp_db",
+        "port": 3306
+    },
+    "server": {
+        "ip": "samp.horizonrp.es",
+        "port": 7778,
+        "name": "Horizon Roleplay",
+        "maxPlayers": 500
+    },
+    "launcher": {
+        "version": "1.0.0",
+        "gameDownloadUrl": "https://horizonrp.es/downloads/HZRPDL.zip",
+        "updateUrl": "https://api.horizonrp.es/launcher/update",
+        "newsApiUrl": "https://api.horizonrp.es/news"
+    }
+}

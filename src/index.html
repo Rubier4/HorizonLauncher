@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Horizon RP Launcher</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <!-- Imagen de fondo -->
+    <div class="background-image"></div>
+    <div class="background-overlay"></div>
+
+    <!-- Barra de título personalizada -->
+    <div class="titlebar">
+        <div class="titlebar-drag">
+            <img src="../assets/logo.ico" alt="Logo" class="titlebar-logo">
+            <span class="titlebar-text">HORIZON ROLEPLAY</span>
+        </div>
+        <div class="titlebar-controls">
+            <button class="titlebar-btn minimize" id="minimize-btn">─</button>
+            <button class="titlebar-btn close" id="close-btn">✕</button>
+        </div>
+    </div>
+
+    <!-- Contenedor principal -->
+    <div class="launcher-container">
+        <!-- Sidebar izquierdo -->
+        <aside class="sidebar">
+            <!-- Logo y nombre del servidor -->
+            <div class="server-header">
+                <img src="../assets/logo.ico" alt="Horizon RP" class="server-logo">
+                <div class="server-name">
+                    <h2>HORIZON</h2>
+                    <span>ROLEPLAY</span>
+                </div>
+            </div>
+
+            <!-- Información del servidor -->
+            <div class="server-status">
+                <div class="status-header">
+                    <div class="status-indicator online"></div>
+                    <span>Servidor Online</span>
+                </div>
+                <div class="server-details">
+                    <div class="detail-item">
+                        <span class="detail-label">Jugadores</span>
+                        <span class="detail-value" id="player-count">156/500</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Ping</span>
+                        <span class="detail-value">32ms</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-value">0.3.DL</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Menú de navegación -->
+            <nav class="nav-menu">
+                <button class="nav-item active" data-section="home">
+                    <svg class="nav-icon" viewBox="0 0 24 24">
+                        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+                    </svg>
+                    <span>Inicio</span>
+                </button>
+                <button class="nav-item" data-section="news">
+                    <svg class="nav-icon" viewBox="0 0 24 24">
+                        <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z" />
+                    </svg>
+                    <span>Noticias</span>
+                </button>
+                <button class="nav-item" data-section="stats">
+                    <svg class="nav-icon" viewBox="0 0 24 24">
+                        <path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" />
+                    </svg>
+                    <span>Estadísticas</span>
+                </button>
+                <button class="nav-item" data-section="settings">
+                    <svg class="nav-icon" viewBox="0 0 24 24">
+                        <path
+                            d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.53c.04-.32.07-.64.07-.97 0-.33-.03-.65-.07-.97l2.11-1.63c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.39-1.06-.73-1.69-.98l-.37-2.65A.506.506 0 0 0 14 2h-4c-.25 0-.46.18-.5.42l-.37 2.65c-.63.25-1.17.59-1.69.98l-2.49-1c-.22-.08-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64L4.57 11c-.04.32-.07.64-.07.97 0 .33.03.65.07.97l-2.11 1.63c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.39 1.06.73 1.69.98l.37 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.37-2.65c.63-.25 1.17-.59 1.69-.98l2.49 1c.22.08.49 0 .61-.22l2-3.46c.13-.22.07-.49-.12-.64l-2.11-1.63Z" />
+                    </svg>
+                    <span>Configuración</span>
+                </button>
+            </nav>
+
+            <!-- Enlaces sociales -->
+            <div class="social-links">
+                <button class="social-btn" onclick="openLink('https://discord.gg/horizonrp')">
+                    <svg viewBox="0 0 24 24">
+                        <path
+                            d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515a.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0a12.64 12.64 0 0 0-.617-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057a19.9 19.9 0 0 0 5.993 3.03a.078.078 0 0 0 .084-.028a14.09 14.09 0 0 0 1.226-1.994a.076.076 0 0 0-.041-.106a13.107 13.107 0 0 1-1.872-.892a.077.077 0 0 1-.008-.128a10.2 10.2 0 0 0 .372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127a12.299 12.299 0 0 1-1.873.892a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028a19.839 19.839 0 0 0 6.002-3.03a.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.956-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.946 2.418-2.157 2.418z" />
+                    </svg>
+                </button>
+                <button class="social-btn" onclick="openLink('https://horizonrp.es')">
+                    <svg viewBox="0 0 24 24">
+                        <path
+                            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
+                    </svg>
+                </button>
+                <button class="social-btn" onclick="openLink('https://foro.horizonrp.es')">
+                    <svg viewBox="0 0 24 24">
+                        <path
+                            d="M21 6h-2v9H6v2c0 .55.45 1 1 1h11l4 4V7c0-.55-.45-1-1-1zm-4 6V3c0-.55-.45-1-1-1H3c-.55 0-1 .45-1 1v14l4-4h10c.55 0 1-.45 1-1z" />
+                    </svg>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Contenido principal -->
+        <main class="main-content">
+            <!-- Sección Home -->
+            <section class="content-section active" id="home">
+                <!-- Hero Banner sin card -->
+                <div class="hero-section">
+                    <h1 class="hero-title">HORIZON ROLEPLAY</h1>
+                    <p class="hero-subtitle">La mejor experiencia de roleplay en español te está esperando</p>
+                    <div class="hero-status">
+                        <span>¡Entra ahora, hay </span>
+                        <span class="player-count-hero" id="hero-player-count">156</span>
+                        <span> personas esperándote!</span>
+                    </div>
+                </div>
+
+                <!-- Área de juego -->
+                <div class="play-area">
+                    <button class="play-button" id="play-btn">
+                        <span class="play-icon">▶</span>
+                        <span class="play-text">JUGAR AHORA</span>
+                    </button>
+                    <div class="download-progress" id="progress-container" style="display: none;">
+                        <div class="progress-info">
+                            <span id="progress-text">Descargando archivos...</span>
+                            <span id="progress-percent">0%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill"></div>
+                        </div>
+                        <div class="progress-details">
+                            <span id="download-speed">0 MB/s</span>
+                            <span id="download-size">0/0 MB</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cards de información -->
+                <div class="info-cards">
+                    <div class="info-card">
+                        <div class="card-icon">
+                            <img src="https://i.imgur.com/AMe373q.png" alt="Comunidad">
+                        </div>
+                        <h3>Comunidad Activa</h3>
+                        <p>Una comunidad comprometida con el Roleplay</p>
+                    </div>
+                    <div class="info-card">
+                        <div class="card-icon">
+                            <img src="https://i.imgur.com/xOU9kwL.png" alt="Sistemas">
+                        </div>
+                        <h3>Sistemas Únicos</h3>
+                        <p>Experiencia roleplay innovadora</p>
+                    </div>
+                    <div class="info-card">
+                        <div class="card-icon">
+                            <img src="https://i.imgur.com/Eu9D00X.png" alt="Trabajos">
+                        </div>
+                        <h3>Trabajos y Negocios</h3>
+                        <p>Sistema económico realista</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Sección Noticias -->
+            <section class="content-section" id="news">
+                <h2 class="section-title">Últimas Noticias y Actualizaciones</h2>
+                <div class="news-grid">
+                    <!-- Se llena dinámicamente -->
+                </div>
+            </section>
+
+            <!-- Sección Estadísticas -->
+            <section class="content-section" id="stats">
+                <h2 class="section-title">Estadísticas del Servidor</h2>
+                <div class="stats-grid">
+                    <!-- Se llena dinámicamente -->
+                </div>
+            </section>
+
+            <!-- Sección Configuración -->
+            <section class="content-section" id="settings">
+                <h2 class="section-title">Configuración del Launcher</h2>
+                <div class="settings-container">
+                    <div class="setting-group">
+                        <h3>Ruta de instalación</h3>
+                        <div class="path-input">
+                            <input type="text" id="install-path" readonly>
+                            <button class="browse-btn">Examinar</button>
+                        </div>
+                    </div>
+                    <div class="setting-group">
+                        <h3>Opciones</h3>
+                        <label class="checkbox-label">
+                            <input type="checkbox" checked>
+                            <span>Iniciar automáticamente al conectar</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" checked>
+                            <span>Mantener launcher abierto</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox">
+                            <span>Modo ventana</span>
+                        </label>
+                    </div>
+                    <div class="setting-group">
+                        <button class="settings-btn danger" id="reset-install-btn">
+                            Reinstalar Juego
+                        </button>
+                        <button class="settings-btn">
+                            Verificar Archivos
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+
+</html>
