@@ -10,6 +10,10 @@ const GameAPI = require('./src/services/api');
 const { autoUpdater } = require('electron-updater');
 const axios = require('axios');
 const crypto = require('crypto');
+const log = require('electron-log');
+const { autoUpdater } = require('electron-updater');
+autoUpdater.logger = log;
+autoUpdater.logger.transports.file.level = 'info';
 
 // Configurar regedit para usar VBS
 const vbsPath = app.isPackaged
