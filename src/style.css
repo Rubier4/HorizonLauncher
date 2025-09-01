@@ -161,6 +161,17 @@ body {
     letter-spacing: 2px;
 }
 
+.app-version {
+    margin-top: 8px;
+    padding-top: 6px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-dim);
+    opacity: 0.85;
+    border-top: 1px dashed var(--border);
+    user-select: text;
+}
+
 /* Estado del servidor */
 .server-status {
     background: var(--bg-card);

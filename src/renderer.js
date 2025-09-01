@@ -1,4 +1,3 @@
-// renderer.js
 const { ipcRenderer } = require('electron');
 
 // Variables globales
@@ -40,9 +39,6 @@ ipcRenderer.on('server-info-update', (event, serverInfo) => {
 });
 
 // Actualizar display del servidor
-// Actualizar display del servidor
-// Actualizar display del servidor
-// Actualizar display del servidor
 function updateServerDisplay(serverInfo) {
     const statusIndicator = document.querySelector('.status-indicator');
     const statusText = document.querySelector('.status-header span:last-child');
@@ -52,56 +48,38 @@ function updateServerDisplay(serverInfo) {
         statusIndicator.classList.add('online');
         statusText.textContent = 'Servidor Online';
 
-        // Actualizar jugadores
         document.getElementById('player-count').textContent = `${serverInfo.players}/${serverInfo.maxPlayers}`;
 
-        // Actualizar ping (asegúrate de que este elemento exista en HTML)
         const pingElement = document.querySelector('.detail-item:nth-child(2) .detail-value');
-        if (pingElement) {
-            pingElement.textContent = `${serverInfo.ping}ms`;
-        }
+        if (pingElement) pingElement.textContent = `${serverInfo.ping}ms`;
 
-        // Actualizar contador del hero (si existe)
         const heroCounter = document.getElementById('hero-player-count');
-        if (heroCounter) {
-            heroCounter.textContent = serverInfo.players;
-        }
+        if (heroCounter) heroCounter.textContent = serverInfo.players;
 
-        // Actualizar versión/gamemode si existe
         const versionElement = document.querySelector('.detail-item:nth-child(3) .detail-value');
-        if (versionElement) {
-            versionElement.textContent = serverInfo.gamemode || '0.3.DL';
-        }
+        if (versionElement) versionElement.textContent = serverInfo.gamemode || '0.3.DL';
     } else {
         statusIndicator.classList.remove('online');
         statusIndicator.classList.add('offline');
         statusText.textContent = 'Servidor Offline';
+
         document.getElementById('player-count').textContent = '0/500';
-
         const pingElement = document.querySelector('.detail-item:nth-child(2) .detail-value');
-        if (pingElement) {
-            pingElement.textContent = '0ms';
-        }
-
+        if (pingElement) pingElement.textContent = '0ms';
         const heroCounter = document.getElementById('hero-player-count');
-        if (heroCounter) {
-            heroCounter.textContent = '0';
-        }
+        if (heroCounter) heroCounter.textContent = '0';
     }
 }
 
-
-// Recibir estadísticas
+// Estadísticas
 ipcRenderer.on('statistics-update', (event, stats) => {
     currentStats = stats;
     updateStatisticsDisplay(stats);
 });
 
-// Actualizar display de estadísticas
 function updateStatisticsDisplay(stats) {
     if (!stats) return;
 
-    // Actualizar cards de estadísticas en la página principal
     const statsHTML = `
         <div class="stat-card">
             <div class="stat-value">${stats.totalUsers.toLocaleString()}</div>
@@ -138,30 +116,22 @@ function updateStatisticsDisplay(stats) {
     `;
 
     const statsGrid = document.querySelector('.stats-grid');
-    if (statsGrid) {
-        statsGrid.innerHTML = statsHTML;
-    }
+    if (statsGrid) statsGrid.innerHTML = statsHTML;
 
-    // Si hay top players, mostrarlos
     if (stats.topPlayers && stats.topPlayers.length > 0) {
         updateTopPlayers(stats.topPlayers);
     }
 }
 
+// Noticias
+ipcRenderer.on('news-update', (event, news) => updateNewsDisplay(news));
 
-// Recibir noticias
-ipcRenderer.on('news-update', (event, news) => {
-    updateNewsDisplay(news);
-});
-
-// Actualizar display de noticias
 function updateNewsDisplay(news) {
     if (!news || news.length === 0) return;
 
     const newsGrid = document.querySelector('.news-grid');
     if (!newsGrid) return;
 
-    // Primera noticia destacada
     const featured = news[0];
     const otherNews = news.slice(1, 4);
 
@@ -183,17 +153,10 @@ function updateNewsDisplay(news) {
             </article>
         `).join('')}
     `;
-
     newsGrid.innerHTML = newsHTML;
 }
 
-// Recibir lista de jugadores online
-ipcRenderer.on('online-players-list', (event, players) => {
-    console.log('Jugadores online:', players);
-    // Aquí puedes crear un modal o sección para mostrar los jugadores online
-});
-
-// Botón de jugar
+// Botón de jugar y progreso
 const playBtn = document.getElementById('play-btn');
 const progressContainer = document.getElementById('progress-container');
 const progressFill = document.getElementById('progress-fill');
@@ -203,28 +166,22 @@ const downloadSpeed = document.getElementById('download-speed');
 const downloadSize = document.getElementById('download-size');
 
 playBtn.addEventListener('click', () => {
-    // Verificar si el servidor está online
     if (currentServerInfo && !currentServerInfo.online) {
         alert('El servidor está actualmente offline. Por favor, intenta más tarde.');
         return;
     }
-
     playBtn.style.display = 'none';
     progressContainer.style.display = 'block';
     ipcRenderer.send('start-game');
 });
 
-// Recibir actualizaciones de progreso
 ipcRenderer.on('download-progress', (event, data) => {
     const percent = Math.round(data.percent);
     progressFill.style.width = `${percent}%`;
     progressPercent.textContent = `${percent}%`;
     progressText.textContent = data.message || 'Descargando archivos...';
 
-    if (data.speed) {
-        downloadSpeed.textContent = `${(data.speed / 1024 / 1024).toFixed(2)} MB/s`;
-    }
-
+    if (data.speed) downloadSpeed.textContent = `${(data.speed / 1024 / 1024).toFixed(2)} MB/s`;
     if (data.current && data.total) {
         const currentMB = (data.current / 1024 / 1024).toFixed(2);
         const totalMB = (data.total / 1024 / 1024).toFixed(2);
@@ -250,9 +207,7 @@ ipcRenderer.on('download-error', (event, error) => {
     }, 3000);
 });
 
-ipcRenderer.on('game-error', (event, error) => {
-    alert('Error al iniciar el juego: ' + error);
-});
+ipcRenderer.on('game-error', (event, error) => alert('Error al iniciar el juego: ' + error));
 
 // Reinstalar juego
 document.getElementById('reset-install-btn').addEventListener('click', () => {
@@ -261,11 +216,9 @@ document.getElementById('reset-install-btn').addEventListener('click', () => {
     }
 });
 
-ipcRenderer.on('installation-reset', (event, message) => {
-    alert(message);
-});
+ipcRenderer.on('installation-reset', (event, message) => alert(message));
 
-// Función para copiar IP
+// Copiar IP
 function copyIP() {
     const serverIP = `${currentServerInfo ? currentServerInfo.host : 'samp.horizonrp.es'}:7777`;
     navigator.clipboard.writeText(serverIP);
@@ -273,12 +226,10 @@ function copyIP() {
     const copyBtn = document.querySelector('.copy-btn');
     const originalText = copyBtn.textContent;
     copyBtn.textContent = '✓';
-    setTimeout(() => {
-        copyBtn.textContent = originalText;
-    }, 1000);
+    setTimeout(() => copyBtn.textContent = originalText, 1000);
 }
 
-// Función para abrir enlaces externos
+// Abrir enlaces externos
 function openLink(url) {
     ipcRenderer.send('open-external', url);
 }
@@ -286,13 +237,19 @@ function openLink(url) {
 // Mostrar ruta de instalación
 ipcRenderer.on('installation-path', (event, installPath) => {
     const pathInput = document.getElementById('install-path');
-    if (pathInput) {
-        pathInput.value = installPath;
-    }
+    if (pathInput) pathInput.value = installPath;
 });
 
-// Solicitar datos iniciales
-window.addEventListener('DOMContentLoaded', () => {
+// Obtener versión de la app al cargar
+window.addEventListener('DOMContentLoaded', async () => {
+    try {
+        const version = await ipcRenderer.invoke('app-version');
+        const versionNode = document.getElementById('app-version');
+        if (versionNode) versionNode.textContent = `v${version}`;
+    } catch (e) {
+        console.warn('No se pudo obtener versión:', e);
+    }
+
     ipcRenderer.send('get-installation-path');
     ipcRenderer.send('request-server-info');
     ipcRenderer.send('request-statistics');

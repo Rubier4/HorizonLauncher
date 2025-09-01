@@ -395,7 +395,7 @@ ipcMain.on('check-user', async (event, username) => {
     const userInfo = await gameAPI.checkUser(username);
     event.reply('user-info', userInfo);
 });
-
+ipcMain.handle('app-version', () => app.getVersion());
 // Obtener informaci�n del servidor (compatibilidad)
 ipcMain.handle('get-server-info', async () => {
     return new Promise((resolve) => {
