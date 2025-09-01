@@ -76,10 +76,12 @@
       {
         "provider": "github",
         "owner": "Rubier4",
-        "repo": "HorizonLauncher",
-        "releaseType": "release",
-        "draft": false
+        "repo": "HorizonLauncher"
       }
     ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Rubier4/HorizonLauncher"
   }
 }
