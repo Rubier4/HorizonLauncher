@@ -6,7 +6,7 @@ on:
       - 'v*.*.*'
 
 permissions:
-  contents: write   # <- imprescindible para crear/actualizar Releases
+  contents: write
 
 jobs:
   build:
@@ -22,11 +22,11 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      # Usa "npm ci" si tienes package-lock.json committeado. Si no, cambia a npm install
+      # Si NO tienes package-lock.json, usa npm install
       - name: Install deps
         run: npm install
 
       - name: Build & publish release
         run: npm run dist -- -w --publish always
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # usa el token integrado (no crees secret propio)
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
