@@ -71,6 +71,13 @@
       "allowElevation": true,
       "deleteAppDataOnUninstall": true,
       "include": "build/installer.nsh"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Rubier4",
+        "repo": "HorizonLauncher"
+      }
+    ]
   }
 }
