@@ -1,22 +1,59 @@
 name: Release
+
 on:
   push:
     tags:
       - 'v*.*.*'
+
 permissions:
   contents: write
+
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 40
+
+    env:
+      # Mirror para Electron (evita 504 de github.com/electron)
+      ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+      # Directorios de cache (usados por electron, electron-builder y app-builder)
+      ELECTRON_CACHE: ${{ runner.temp }}\.cache\electron
+      ELECTRON_BUILDER_CACHE: ${{ runner.temp }}\.cache\electron-builder
+      APP_BUILDER_CACHE: ${{ runner.temp }}\.cache\app-builder
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
+
+      - name: Cache Electron artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.ELECTRON_CACHE }}
+            ${{ env.ELECTRON_BUILDER_CACHE }}
+            ${{ env.APP_BUILDER_CACHE }}
+          key: ${{ runner.os }}-electron-cache-${{ hashFiles('package-lock.json') }}
+
       - name: Install deps
         run: npm install
-      - name: Build & publish release
-        run: npm run dist -- -w --publish always
+
+      # Reintentos automáticos del paso de build/publicación (por si el mirror/CDN falla)
+      - name: Build & publish (retry)
+        uses: nick-fields/retry@v3
+        with:
+          max_attempts: 3
+          timeout_minutes: 25
+          command: npm run dist -- -w --publish always
         env:
+          ELECTRON_MIRROR: ${{ env.ELECTRON_MIRROR }}
+          ELECTRON_CACHE: ${{ env.ELECTRON_CACHE }}
+          ELECTRON_BUILDER_CACHE: ${{ env.ELECTRON_BUILDER_CACHE }}
+          APP_BUILDER_CACHE: ${{ env.APP_BUILDER_CACHE }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
