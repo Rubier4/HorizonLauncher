@@ -14,7 +14,7 @@ const log = require('electron-log');
 autoUpdater.logger = log;
 autoUpdater.logger.transports.file.level = 'info';
 
-// Configurar regedit para usar VBS (necesario si en algún momento usas su API)
+// Configurar regedit para usar VBS (necesario si en algn momento usas su API)
 const vbsPath = app.isPackaged
     ? path.join(process.resourcesPath, 'regedit', 'vbs')
     : path.join(__dirname, 'node_modules', 'regedit', 'vbs');
@@ -31,7 +31,7 @@ let nicknameWindow = null;
 let downloadActive = false;
 const gameAPI = new GameAPI();
 
-// Configuración del servidor
+// Configuracin del servidor
 const CONFIG = {
     serverName: 'Horizon Roleplay',
     serverIP: '195.26.252.73',
@@ -45,11 +45,11 @@ const CONFIG = {
     gtaPath: null
 };
 
-const TITLEBAR_H = 32; // alto de tu barra de título custom
+const TITLEBAR_H = 32; // alto de tu barra de ttulo custom
 
 // Ajustes manuales para mover la ventana (px)
-const OFFSET_X = -15;  // positivo ? más a la derecha, negativo ? más a la izquierda
-const OFFSET_Y = -5; // positivo ? más abajo, negativo ? más arriba
+const OFFSET_X = -15;  // positivo ? ms a la derecha, negativo ? ms a la izquierda
+const OFFSET_Y = -5; // positivo ? ms abajo, negativo ? ms arriba
 
 function getSidebarWidth(winWidth) {
     return winWidth <= 1200 ? 250 : 280;
@@ -68,13 +68,13 @@ function positionNicknameWindow() {
     const sidebarW = getSidebarWidth(mainB.width);
     const pad = getContentPadding(mainB.width);
 
-    // Área útil horizontal
+    // rea til horizontal
     const rightW = mainB.width - sidebarW - (pad * 2);
     let x = Math.round(
         mainB.x + sidebarW + pad + (rightW - modalB.width) / 2
     );
 
-    // Área útil vertical
+    // rea til vertical
     const rightH = mainB.height - TITLEBAR_H - (pad * 2);
     let y = Math.round(
         mainB.y + TITLEBAR_H + pad + (rightH - modalB.height) / 2
@@ -90,7 +90,7 @@ function positionNicknameWindow() {
 
 const GTA_MANIFEST_URL = 'https://horizonrp.es/downloads/manifest.json';
 
-// Utilidades versión local
+// Utilidades versin local
 function getLocalGameVersion() {
     try {
         if (!CONFIG.gtaPath) return '0.0.0';
@@ -145,23 +145,22 @@ async function initGameAutoUpdate() {
 
         const { data: manifest } = await axios.get(GTA_MANIFEST_URL, { timeout: 8000 });
         if (!manifest || !manifest.version || !manifest.zip || !manifest.sha256) {
-            console.warn('Manifest inválido', manifest);
+            console.warn('Manifest invlido', manifest);
             return;
         }
 
         const localVersion = getLocalGameVersion();
         if (!fs.existsSync(CONFIG.gtaPath)) {
-            console.log('GTA no instalado, instalando versión', manifest.version);
-            await downloadAndInstallGTA(manifest);
+            console.log('GTA no instalado.');
             return;
         }
 
         if (isNewer(manifest.version, localVersion)) {
-            console.log(`Actualización GTA disponible: ${localVersion} -> ${manifest.version}`);
+            console.log(`Actualizacin GTA disponible: ${localVersion} -> ${manifest.version}`);
             if (mainWindow) mainWindow.webContents.send('game-update', { state: 'available', version: manifest.version });
             await downloadAndInstallGTA(manifest);
         } else {
-            console.log('GTA está actualizado:', localVersion);
+            console.log('GTA est actualizado:', localVersion);
             if (mainWindow) mainWindow.webContents.send('game-update', { state: 'uptodate', version: localVersion });
         }
     } catch (e) {
@@ -174,13 +173,13 @@ async function downloadAndInstallGTA(manifest) {
     await fs.ensureDir(tempDir);
     const tempZip = path.join(tempDir, `GTAHorizon - ${manifest.version}.zip`);
 
-    if (mainWindow) mainWindow.webContents.send('download-progress', { percent: 0, message: 'Actualización de GTA: conectando...' });
+    if (mainWindow) mainWindow.webContents.send('download-progress', { percent: 0, message: 'Actualizacin de GTA: conectando...' });
 
     await downloadFile(manifest.zip, tempZip, (percent, current, total, speed) => {
         if (mainWindow) {
             mainWindow.webContents.send('download-progress', {
                 percent,
-                message: 'Actualizando GTA...',
+                message: 'Actualizando GTA...', 
                 current, total, speed
             });
         }
@@ -197,12 +196,12 @@ async function downloadAndInstallGTA(manifest) {
             await fs.rename(CONFIG.gtaPath, backupDir);
         }
         await fs.ensureDir(CONFIG.gtaPath);
-        if (mainWindow) mainWindow.webContents.send('download-progress', { percent: 90, message: 'Instalando actualización...' });
+        if (mainWindow) mainWindow.webContents.send('download-progress', { percent: 90, message: 'Instalando actualizacin...' });
         await extractZip(tempZip, CONFIG.gtaPath);
 
         setLocalGameVersion(manifest.version);
         if (mainWindow) {
-            mainWindow.webContents.send('download-progress', { percent: 100, message: 'Actualización completa' });
+            mainWindow.webContents.send('download-progress', { percent: 100, message: 'Actualizacin completa' });
             mainWindow.webContents.send('download-complete');
         }
 
@@ -226,7 +225,7 @@ function loadConfig() {
             const saved = JSON.parse(fs.readFileSync(configPath, 'utf8'));
             if (saved.gtaPath && fs.existsSync(path.join(saved.gtaPath, '.horizonrp'))) {
                 CONFIG.gtaPath = saved.gtaPath;
-                console.log('? Instalación cargada:', CONFIG.gtaPath);
+                console.log('? Instalacin cargada:', CONFIG.gtaPath);
                 return;
             }
         }
@@ -236,7 +235,7 @@ function loadConfig() {
 
     const baseDir = app.isPackaged ? path.dirname(process.execPath) : path.join(app.getPath('home'), 'Horizon RP Dev');
     CONFIG.gtaPath = path.join(baseDir, 'GTA Horizon');
-    console.log('? Ruta de GTA calculada automáticamente:', CONFIG.gtaPath);
+    console.log('? Ruta de GTA calculada automticamente:', CONFIG.gtaPath);
     saveConfig();
 }
 function saveConfig() {
@@ -298,7 +297,7 @@ function initLauncherAutoUpdate() {
     }
 }
 
-// Inicializar API y timers (sin intervalo para estadísticas)
+// Inicializar API y timers (sin intervalo para estadsticas)
 async function initializeAPI() {
     await gameAPI.initDatabase();
 
@@ -309,7 +308,7 @@ async function initializeAPI() {
     setInterval(updateNews, 60000);
 }
 
-// ====== Server/News ======
+// ====== Server/News ====== 
 async function updateServerInfo() {
     const serverOptions = { host: '195.26.252.73', port: 7778, timeout: 5000 };
     const startTime = Date.now();
@@ -343,7 +342,7 @@ async function updateNews() {
     if (mainWindow) mainWindow.webContents.send('news-update', news);
 }
 
-// ====== REG.EXE helper ======
+// ====== REG.EXE helper ====== 
 function runReg(args) {
     return new Promise((resolve, reject) => {
         const regExe = process.env.windir
@@ -363,8 +362,8 @@ function runReg(args) {
     });
 }
 function parseRegQueryValue(stdout, valueName) {
-    // Busca líneas con: valueName   REG_SZ   value
-    const re = new RegExp(`\\s${valueName}\\s+REG_\\w+\\s+(.*)`);
+    // Busca lneas con: valueName   REG_SZ   value
+    const re = new RegExp(`\s${valueName}\s+REG_\w+\s+(.*)`);
     const lines = stdout.split(/\r?\n/);
     for (const line of lines) {
         const m = line.match(re);
@@ -373,7 +372,7 @@ function parseRegQueryValue(stdout, valueName) {
     return '';
 }
 
-// ====== Nickname en registro (HKCU\Software\SAMP) ======
+// ====== Nickname en registro (HKCU\Software\SAMP) ====== 
 async function getNickname() {
     const key = 'HKCU\\Software\\SAMP';
 
@@ -400,11 +399,11 @@ async function setNickname(nickname) {
 
     // Guarda en PlayerName (principal)
     await runReg(['ADD', key, '/v', 'PlayerName', '/t', 'REG_SZ', '/d', nickname, '/f']).catch(() => { });
-    // También en player_name (compat)
+    // Tambin en player_name (compat)
     await runReg(['ADD', key, '/v', 'player_name', '/t', 'REG_SZ', '/d', nickname, '/f']).catch(() => { });
 }
 
-// ====== Actualizar registro de SAMP (ruta del gta) ======
+// ====== Actualizar registro de SAMP (ruta del gta) ====== 
 async function updateSAMPRegistry(gtaExePath) {
     const key = 'HKCU\\Software\\SAMP';
 
@@ -434,7 +433,7 @@ async function updateSAMPRegistry(gtaExePath) {
     console.log('? Registro SAMP actualizado (/reg:64):', gtaExePath);
 }
 
-// ====== Descargar/extraer ======
+// ====== Descargar/extraer ====== 
 function downloadFile(url, dest, onProgress) {
     return new Promise((resolve, reject) => {
         const file = fs.createWriteStream(dest);
@@ -522,7 +521,7 @@ function extractZip(source, dest) {
     });
 }
 
-// ====== IPC ======
+// ====== IPC ====== 
 
 // Controles de ventana
 ipcMain.on('minimize-window', () => mainWindow.minimize());
@@ -533,7 +532,7 @@ ipcMain.on('close-window', () => {
             buttons: ['Cancelar descarga y salir', 'Continuar descargando'],
             defaultId: 1,
             message: 'Hay una descarga en progreso',
-            detail: 'Si sales ahora, tendrás que descargar todo de nuevo.'
+            detail: 'Si sales ahora, tendrs que descargar todo de nuevo.'
         });
         if (choice === 1) return;
     }
@@ -541,15 +540,21 @@ ipcMain.on('close-window', () => {
 });
 
 ipcMain.on('open-external', (e, url) => shell.openExternal(url));
+
+ipcMain.on('open-path', (e, folderPath) => {
+    if (folderPath) {
+        shell.openPath(folderPath);
+    }
+});
 ipcMain.on('request-server-info', async () => { await updateServerInfo(); });
 
-// Estadísticas bajo demanda
+// Estadsticas bajo demanda
 ipcMain.on('request-statistics', async () => {
     const stats = await gameAPI.getStatistics();
     if (mainWindow && stats) mainWindow.webContents.send('statistics-update', stats);
 });
 
-// Versión app
+// Versin app
 ipcMain.handle('app-version', () => app.getVersion());
 
 // Nickname window
@@ -565,7 +570,7 @@ ipcMain.on('open-nickname-window', () => {
         resizable: false,
         parent: mainWindow, // hija del launcher
         modal: false, // no bloquea el launcher
-        transparent: true, // que no se vea “recuadro blanco”
+        transparent: true, // que no se vea recuadro blanco
         backgroundColor: '#00000000',
         alwaysOnTop: true, // opcional; si no te gusta, ponlo en false
         webPreferences: {
@@ -576,7 +581,7 @@ ipcMain.on('open-nickname-window', () => {
 
     nicknameWindow.loadFile('src/nickname.html');
 
-    // Posicionarla cuando esté lista
+    // Posicionarla cuando est lista
     nicknameWindow.once('ready-to-show', () => {
         positionNicknameWindow();
         nicknameWindow.show();
@@ -601,35 +606,26 @@ ipcMain.on('get-nickname', async (event) => {
     event.reply('nickname-current', nick || '');
 });
 ipcMain.on('save-nickname-and-play', async (event, nickname) => {
-    try {
-        await setNickname(nickname);
-    } catch (e) {
-        console.error('Error guardando nickname:', e);
-    }
+    try { await setNickname(nickname); } catch (e) { console.error('Error guardando nickname:', e); }
+    if (nicknameWindow && !nicknameWindow.isDestroyed()) nicknameWindow.close();
 
-    // Cerrar la ventana modal si existe
-    if (nicknameWindow && !nicknameWindow.isDestroyed()) {
-        nicknameWindow.close();
-    }
-
-    // Continuar flujo de juego
     const isInstalled = await checkGameInstalled();
     if (!isInstalled) {
-        downloadGame(event);
+        downloadGame(); // <- sin event
     } else {
         const result = await launchGame();
-        if (!result.success) event.reply('game-error', result.message);
+        if (!result.success && mainWindow) mainWindow.webContents.send('game-error', result.message);
     }
 });
 
-// Obtener ruta instalación (para settings)
+// Obtener ruta instalacin (para settings)
 ipcMain.on('get-installation-path', () => {
     if (mainWindow) {
         mainWindow.webContents.send('installation-path', CONFIG.gtaPath || 'No instalado');
     }
 });
 
-// ===== SISTEMA DE INSTALACIÓN Y JUEGO =====
+// ===== SISTEMA DE INSTALACIN Y JUEGO ===== 
 ipcMain.handle('check-gta-installed', async () => {
     if (!CONFIG.gtaPath) return false;
     const markerFile = path.join(CONFIG.gtaPath, '.horizonrp');
@@ -650,8 +646,8 @@ ipcMain.on('reset-installation', async () => {
         type: 'warning',
         buttons: ['Cancelar', 'Eliminar y reinstalar'],
         defaultId: 0,
-        message: '¿Deseas eliminar la instalación actual?',
-        detail: 'Esto eliminará todos los archivos del juego y tendrás que descargar todo de nuevo.'
+        message: 'Deseas eliminar la instalacin actual?',
+        detail: 'Esto eliminar todos los archivos del juego y tendrs que descargar todo de nuevo.'
     });
     if (choice === 1 && CONFIG.gtaPath && fs.existsSync(CONFIG.gtaPath)) {
         try {
@@ -659,20 +655,20 @@ ipcMain.on('reset-installation', async () => {
             CONFIG.gtaPath = null;
             const configPath = path.join(app.getPath('userData'), 'horizonrp_config.json');
             if (fs.existsSync(configPath)) fs.unlinkSync(configPath);
-            if (mainWindow) mainWindow.webContents.send('installation-reset', 'Instalación eliminada correctamente');
+            if (mainWindow) mainWindow.webContents.send('installation-reset', 'Instalacin eliminada correctamente');
         } catch (error) {
             if (mainWindow) mainWindow.webContents.send('installation-reset', 'Error: ' + error.message);
         }
     }
 });
 
-ipcMain.on('start-game', async (event) => {
+ipcMain.on('start-game', async () => {
     const isInstalled = await checkGameInstalled();
     if (!isInstalled) {
-        downloadGame(event);
+        downloadGame(); // <- sin event
     } else {
         const result = await launchGame();
-        if (!result.success) event.reply('game-error', result.message);
+        if (!result.success && mainWindow) mainWindow.webContents.send('game-error', result.message);
     }
 });
 
@@ -684,8 +680,16 @@ async function checkGameInstalled() {
     return !!(gameFiles['gta_sa.exe'] && gameFiles['samp.exe']);
 }
 
-async function downloadGame(event) {
-    if (downloadActive) { event.reply('download-error', 'Descarga ya en progreso'); return; }
+async function downloadGame() {
+    // helper para enviar SIEMPRE al mainWindow
+    const send = (ch, payload) => { 
+        try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(ch, payload); } catch { }
+    };
+
+    if (downloadActive) {
+        send('download-error', 'Descarga ya en progreso');
+        return;
+    }
     if (!CONFIG.gtaPath) loadConfig();
     await fs.ensureDir(CONFIG.gtaPath);
     downloadActive = true;
@@ -697,24 +701,23 @@ async function downloadGame(event) {
             server: CONFIG.serverName,
             installedAt: new Date().toISOString()
         }));
-
         const tempDir = path.join(app.getPath('userData'), 'temp');
         await fs.ensureDir(tempDir);
         const tempFile = path.join(tempDir, 'GTA_HorizonRP.zip');
 
-        event.reply('download-progress', { percent: 0, message: 'Conectando con el servidor...' });
+        send('download-progress', { percent: 0, message: 'Conectando con el servidor...' });
 
         await downloadFile(CONFIG.downloadURL, tempFile, (progress, downloaded, total) => {
-            event.reply('download-progress', {
+            send('download-progress', {
                 percent: progress,
-                message: 'Descargando archivos del juego...',
+                message: 'Descargando archivos del juego...', 
                 current: downloaded,
                 total: total,
                 speed: downloaded / 10
             });
         });
 
-        event.reply('download-progress', { percent: 90, message: 'Extrayendo archivos... Por favor espera.' });
+        send('download-progress', { percent: 90, message: 'Extrayendo archivos... Por favor espera.' });
         await extractZip(tempFile, CONFIG.gtaPath);
         await fs.remove(tempFile);
         await fs.remove(tempDir);
@@ -723,10 +726,11 @@ async function downloadGame(event) {
         if (gameFiles['gta_sa.exe'] && gameFiles['samp.exe']) {
             saveConfig();
             downloadActive = false;
-            event.reply('download-complete');
+            send('download-complete');
+
             setTimeout(async () => {
                 const result = await launchGame();
-                if (!result.success) event.reply('game-error', result.message);
+                if (!result.success) send('game-error', result.message);
             }, 2000);
         } else {
             throw new Error('Archivos del juego no encontrados en el ZIP');
@@ -736,14 +740,14 @@ async function downloadGame(event) {
         if (CONFIG.gtaPath && fs.existsSync(CONFIG.gtaPath)) await fs.remove(CONFIG.gtaPath);
         CONFIG.gtaPath = null;
         console.error('Error en descarga:', error);
-        event.reply('download-error', error.message);
+        send('download-error', error.message);
     }
 }
 
 async function launchGame() {
-    if (!CONFIG.gtaPath) return { success: false, message: 'El juego no está instalado' };
+    if (!CONFIG.gtaPath) return { success: false, message: 'El juego no est instalado' };
     const markerFile = path.join(CONFIG.gtaPath, '.horizonrp');
-    if (!fs.existsSync(markerFile)) { CONFIG.gtaPath = null; return { success: false, message: 'Instalación corrupta. Por favor reinstala.' }; }
+    if (!fs.existsSync(markerFile)) { CONFIG.gtaPath = null; return { success: false, message: 'Instalacin corrupta. Por favor reinstala.' }; }
 
     const gameFiles = findGameFiles(CONFIG.gtaPath);
     if (!gameFiles['samp.exe'] || !gameFiles['gta_sa.exe']) return { success: false, message: 'No se encontraron los archivos del juego' };
@@ -767,7 +771,7 @@ async function launchGame() {
     }
 }
 
-// ====== Aux ======
+// ====== Aux ====== 
 function findGameFiles(basePath) {
     const requiredFiles = ['gta_sa.exe', 'samp.exe', 'samp.dll'];
     const foundFiles = {};
@@ -800,7 +804,7 @@ function formatBytes(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-// ===== INICIALIZACIÓN =====
+// ===== INICIALIZACIN ===== 
 app.whenReady().then(() => {
     loadConfig();
     createWindow();

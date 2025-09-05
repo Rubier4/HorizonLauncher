@@ -173,14 +173,32 @@ playBtn.addEventListener('click', () => {
     ipcRenderer.send('open-nickname-window');
 });
 
-ipcRenderer.on('download-progress', (event, data) => {
-    const percent = Math.round(data.percent);
-    progressFill.style.width = `${percent}%`;
-    progressPercent.textContent = `${percent}%`;
-    progressText.textContent = data.message || 'Descargando archivos...';
+function updatePlayButton(isInstalled) {
+    const playBtn = document.getElementById('play-btn');
+    if (playBtn) {
+        const playText = playBtn.querySelector('.play-text');
+        if(playText) {
+            if (isInstalled) {
+                playText.textContent = 'JUGAR AHORA';
+            } else {
+                playText.textContent = 'INSTALAR';
+            }
+        }
+    }
+}
 
-    if (data.speed) downloadSpeed.textContent = `${(data.speed / 1024 / 1024).toFixed(2)} MB/s`;
-    if (data.current && data.total) {
+ipcRenderer.on('download-progress', (_, data) => {
+    // Mostrar UI de progreso siempre que llegue progreso
+    if (playBtn) playBtn.style.display = 'none';
+    if (progressContainer) progressContainer.style.display = 'block';
+
+    const percent = Math.round(data.percent || 0);
+    if (progressFill) progressFill.style.width = percent + '%';
+    if (progressPercent) progressPercent.textContent = percent + '%';
+    if (progressText) progressText.textContent = data.message || 'Descargando archivos...';
+
+    if (downloadSpeed && data.speed) downloadSpeed.textContent = (data.speed / 1024 / 1024).toFixed(2) + ' MB / s';
+    if (downloadSize && data.current && data.total) {
         const currentMB = (data.current / 1024 / 1024).toFixed(2);
         const totalMB = (data.total / 1024 / 1024).toFixed(2);
         downloadSize.textContent = `${currentMB}/${totalMB} MB`;
@@ -188,20 +206,21 @@ ipcRenderer.on('download-progress', (event, data) => {
 });
 
 ipcRenderer.on('download-complete', () => {
-    progressText.textContent = '¡Descarga completa! Iniciando juego...';
+    if (progressText) progressText.textContent = '¡Descarga completa! Iniciando juego...';
     setTimeout(() => {
-        progressContainer.style.display = 'none';
-        playBtn.style.display = 'flex';
+        if (progressContainer) progressContainer.style.display = 'none';
+        if (playBtn) playBtn.style.display = 'flex';
     }, 3000);
+    updatePlayButton(true);
 });
 
-ipcRenderer.on('download-error', (event, error) => {
-    progressText.textContent = `Error: ${error}`;
-    progressFill.style.background = 'var(--danger)';
+ipcRenderer.on('download-error', (_, error) => {
+    if (progressText) progressText.textContent = 'Error: ' + error;
+    if (progressFill) progressFill.style.background = 'var(--danger)';
     setTimeout(() => {
-        progressContainer.style.display = 'none';
-        playBtn.style.display = 'flex';
-        progressFill.style.background = '';
+        if (progressContainer) progressContainer.style.display = 'none';
+        if (playBtn) playBtn.style.display = 'flex';
+        if (progressFill) progressFill.style.background = '';
     }, 3000);
 });
 
@@ -214,7 +233,10 @@ document.getElementById('reset-install-btn').addEventListener('click', () => {
     }
 });
 
-ipcRenderer.on('installation-reset', (event, message) => alert(message));
+ipcRenderer.on('installation-reset', (event, message) => {
+    alert(message);
+    updatePlayButton(false);
+});
 
 // Copiar IP
 function copyIP() {
@@ -250,4 +272,23 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     ipcRenderer.send('get-installation-path');
     ipcRenderer.send('request-server-info');
+
+    try {
+        const isInstalled = await ipcRenderer.invoke('check-gta-installed');
+        updatePlayButton(isInstalled);
+    } catch (e) {
+        console.warn('Could not check if GTA is installed:', e);
+        updatePlayButton(false); // Assume not installed on error
+    }
 });
+
+// Botón de "Examinar" para abrir la ruta de instalación
+const browseBtn = document.querySelector('.browse-btn');
+if (browseBtn) {
+    browseBtn.addEventListener('click', () => {
+        const installPath = document.getElementById('install-path').value;
+        if (installPath && installPath !== 'No instalado') {
+            ipcRenderer.send('open-path', installPath);
+        }
+    });
+}
