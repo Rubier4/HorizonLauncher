@@ -177,7 +177,7 @@ function updatePlayButton(isInstalled) {
     const playBtn = document.getElementById('play-btn');
     if (playBtn) {
         const playText = playBtn.querySelector('.play-text');
-        if(playText) {
+        if (playText) {
             if (isInstalled) {
                 playText.textContent = 'JUGAR AHORA';
             } else {

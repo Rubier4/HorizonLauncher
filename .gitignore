@@ -20,6 +20,7 @@ pnpm-lock.yaml
 .DS_Store
 Thumbs.db
 
+
 # Build artifacts (Electron / electron-builder)
 dist/
 out/

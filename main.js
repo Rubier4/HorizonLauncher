@@ -29,6 +29,7 @@ app.disableHardwareAcceleration();
 let mainWindow;
 let nicknameWindow = null;
 let updateWindow = null;
+let checkingUpdatesWindow = null;
 let downloadActive = false;
 const gameAPI = new GameAPI();
 
@@ -197,8 +198,15 @@ async function downloadAndInstallGTA(manifest) {
             await fs.rename(CONFIG.gtaPath, backupDir);
         }
         await fs.ensureDir(CONFIG.gtaPath);
-        if (mainWindow) mainWindow.webContents.send('download-progress', { percent: 90, message: 'Instalando actualizacin...' });
-        await extractZip(tempZip, CONFIG.gtaPath);
+
+        await extractZip(tempZip, CONFIG.gtaPath, (progress) => {
+            if (mainWindow) {
+                mainWindow.webContents.send('download-progress', {
+                    percent: progress,
+                    message: 'Instalando actualización...',
+                });
+            }
+        });
 
         setLocalGameVersion(manifest.version);
         if (mainWindow) {
@@ -278,23 +286,43 @@ function createWindow() {
     });
 }
 
+function startMainApp() {
+    if (checkingUpdatesWindow) {
+        checkingUpdatesWindow.close();
+    }
+    if (mainWindow) { // If it's already open for some reason
+        return;
+    }
+    loadConfig();
+    createWindow();
+    initGameAutoUpdate();
+}
+
 function initLauncherAutoUpdate() {
     log.info('Initializing launcher auto update...');
     autoUpdater.on('error', (error) => {
         log.error('Update error:', error == null ? "unknown" : (error.stack || error).toString());
+        startMainApp();
     });
 
     autoUpdater.on('update-not-available', () => {
         log.info('Update not available.');
+        startMainApp();
     });
 
     autoUpdater.on('update-available', () => {
         log.info('Update available, starting download...');
+        if (checkingUpdatesWindow) {
+            checkingUpdatesWindow.webContents.send('update-message', 'Descargando actualización...');
+        }
     });
 
     autoUpdater.on('update-downloaded', () => {
         log.info('Update downloaded, showing update window.');
 
+        if (checkingUpdatesWindow) {
+            checkingUpdatesWindow.close();
+        }
         if (mainWindow) {
             mainWindow.close();
         }
@@ -325,7 +353,7 @@ function initLauncherAutoUpdate() {
         });
 
         setTimeout(() => {
-            if (!updateWindow) return; // It might have been closed
+            if (!updateWindow) return;
             log.info('Quitting and installing update...');
             try {
                 autoUpdater.quitAndInstall(true, true);
@@ -333,14 +361,14 @@ function initLauncherAutoUpdate() {
                 log.error('Error during quitAndInstall:', e);
                 app.quit();
             }
-        }, 5000); // 5 seconds to read the message
+        }, 5000);
     });
 
-    // Check for updates silently
     try {
         autoUpdater.checkForUpdates();
     } catch (e) {
         log.error('Error checking for updates:', e);
+        startMainApp();
     }
 }
 
@@ -533,13 +561,22 @@ function downloadFile(url, dest, onProgress) {
         });
     });
 }
-function extractZip(source, dest) {
+
+async function extractZip(source, dest, onProgress) {
+    const directory = await unzipper.Open.file(source);
+    const totalEntries = directory.files.length;
+    let extractedEntries = 0;
+
     return new Promise((resolve, reject) => {
         fs.ensureDirSync(dest);
 
         fs.createReadStream(source)
             .pipe(unzipper.Parse())
             .on('entry', (entry) => {
+                extractedEntries++;
+                const progress = Math.round((extractedEntries / totalEntries) * 100);
+                if (onProgress) onProgress(progress);
+
                 const fileName = entry.path;
                 const type = entry.type;
 
@@ -672,13 +709,15 @@ ipcMain.on('get-installation-path', () => {
     }
 });
 
-// ===== SISTEMA DE INSTALACIN Y JUEGO ===== 
+// ===== SISTEMA DE INSTALACIN Y JUEGO =====
 ipcMain.handle('check-gta-installed', async () => {
     if (!CONFIG.gtaPath) return false;
     const markerFile = path.join(CONFIG.gtaPath, '.horizonrp');
-    if (!fs.existsSync(markerFile)) { CONFIG.gtaPath = null; return false; }
+    if (!fs.existsSync(markerFile)) {
+        return false;
+    }
     const gameFiles = findGameFiles(CONFIG.gtaPath);
-    return gameFiles['gta_sa.exe'] && gameFiles['samp.exe'];
+    return !!(gameFiles['gta_sa.exe'] && gameFiles['samp.exe']);
 });
 ipcMain.handle('get-install-path', async () => CONFIG.gtaPath || 'No instalado');
 ipcMain.handle('verify-files', async () => {
@@ -722,7 +761,9 @@ ipcMain.on('start-game', async () => {
 async function checkGameInstalled() {
     if (!CONFIG.gtaPath) return false;
     const markerFile = path.join(CONFIG.gtaPath, '.horizonrp');
-    if (!fs.existsSync(markerFile)) { CONFIG.gtaPath = null; return false; }
+    if (!fs.existsSync(markerFile)) {
+        return false;
+    }
     const gameFiles = findGameFiles(CONFIG.gtaPath);
     return !!(gameFiles['gta_sa.exe'] && gameFiles['samp.exe']);
 }
@@ -754,18 +795,23 @@ async function downloadGame() {
 
         send('download-progress', { percent: 0, message: 'Conectando con el servidor...' });
 
-        await downloadFile(CONFIG.downloadURL, tempFile, (progress, downloaded, total) => {
+        await downloadFile(CONFIG.downloadURL, tempFile, (progress, downloaded, total, speed) => {
             send('download-progress', {
                 percent: progress,
                 message: 'Descargando archivos del juego...',
                 current: downloaded,
                 total: total,
-                speed: downloaded / 10
+                speed: speed
             });
         });
 
-        send('download-progress', { percent: 90, message: 'Extrayendo archivos... Por favor espera.' });
-        await extractZip(tempFile, CONFIG.gtaPath);
+        await extractZip(tempFile, CONFIG.gtaPath, (progress) => {
+            send('download-progress', {
+                percent: progress,
+                message: 'Descomprimiendo...',
+            });
+        });
+
         await fs.remove(tempFile);
         await fs.remove(tempDir);
 
@@ -794,7 +840,7 @@ async function downloadGame() {
 async function launchGame() {
     if (!CONFIG.gtaPath) return { success: false, message: 'El juego no est instalado' };
     const markerFile = path.join(CONFIG.gtaPath, '.horizonrp');
-    if (!fs.existsSync(markerFile)) { CONFIG.gtaPath = null; return { success: false, message: 'Instalacin corrupta. Por favor reinstala.' }; }
+    if (!fs.existsSync(markerFile)) { return { success: false, message: 'Instalacin corrupta. Por favor reinstala.' }; }
 
     const gameFiles = findGameFiles(CONFIG.gtaPath);
     if (!gameFiles['samp.exe'] || !gameFiles['gta_sa.exe']) return { success: false, message: 'No se encontraron los archivos del juego' };
@@ -851,12 +897,30 @@ function formatBytes(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-// ===== INICIALIZACIN ===== 
+// ===== INICIALIZACIN =====
 app.whenReady().then(() => {
-    loadConfig();
-    createWindow();
+    checkingUpdatesWindow = new BrowserWindow({
+        width: 450,
+        height: 250,
+        frame: false,
+        resizable: false,
+        movable: true,
+        transparent: true,
+        backgroundColor: '#00000000',
+        alwaysOnTop: true,
+        center: true,
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false,
+        }
+    });
+    checkingUpdatesWindow.loadFile('src/checking-updates.html');
+    checkingUpdatesWindow.on('closed', () => {
+        checkingUpdatesWindow = null;
+    });
+
+    // After showing the window, start the update check
     initLauncherAutoUpdate();
-    initGameAutoUpdate();
 });
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
