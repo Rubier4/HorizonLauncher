@@ -180,7 +180,7 @@ async function downloadAndInstallGTA(manifest) {
         if (mainWindow) {
             mainWindow.webContents.send('download-progress', {
                 percent,
-                message: 'Actualizando GTA...', 
+                message: 'Actualizando GTA...',
                 current, total, speed
             });
         }
@@ -294,7 +294,7 @@ function initLauncherAutoUpdate() {
 
     autoUpdater.on('update-downloaded', () => {
         log.info('Update downloaded, showing update window.');
-        
+
         if (mainWindow) {
             mainWindow.close();
         }
@@ -339,7 +339,7 @@ function initLauncherAutoUpdate() {
     // Check for updates silently
     try {
         autoUpdater.checkForUpdates();
-    } catch(e) {
+    } catch (e) {
         log.error('Error checking for updates:', e);
     }
 }
@@ -462,7 +462,7 @@ async function updateSAMPRegistry(gtaExePath) {
         await runReg(['ADD', key, '/v', 'gta_sa_exe_last', '/t', 'REG_SZ', '/d', gtaExePath, '/f']);
         console.log('? Registro SAMP actualizado (vista por defecto):', gtaExePath);
         return;
-    } catch (e1) { 
+    } catch (e1) {
         console.warn('Fallo vista por defecto, reintentando /reg:32', e1.message);
     }
 
@@ -471,7 +471,7 @@ async function updateSAMPRegistry(gtaExePath) {
         await runReg(['ADD', key, '/v', 'gta_sa_exe_last', '/t', 'REG_SZ', '/d', gtaExePath, '/f', '/reg:32']);
         console.log('? Registro SAMP actualizado (/reg:32):', gtaExePath);
         return;
-    } catch (e2) { 
+    } catch (e2) {
         console.warn('Fallo /reg:32, reintentando /reg:64', e2.message);
     }
 
@@ -729,7 +729,7 @@ async function checkGameInstalled() {
 
 async function downloadGame() {
     // helper para enviar SIEMPRE al mainWindow
-    const send = (ch, payload) => { 
+    const send = (ch, payload) => {
         try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(ch, payload); } catch { }
     };
 
@@ -757,7 +757,7 @@ async function downloadGame() {
         await downloadFile(CONFIG.downloadURL, tempFile, (progress, downloaded, total) => {
             send('download-progress', {
                 percent: progress,
-                message: 'Descargando archivos del juego...', 
+                message: 'Descargando archivos del juego...',
                 current: downloaded,
                 total: total,
                 speed: downloaded / 10
