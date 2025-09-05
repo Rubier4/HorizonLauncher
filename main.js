@@ -28,6 +28,7 @@ app.disableHardwareAcceleration();
 // Variables globales
 let mainWindow;
 let nicknameWindow = null;
+let updateWindow = null;
 let downloadActive = false;
 const gameAPI = new GameAPI();
 
@@ -278,22 +279,68 @@ function createWindow() {
 }
 
 function initLauncherAutoUpdate() {
-    try {
-        autoUpdater.on('update-available', () => {
-            if (mainWindow) mainWindow.webContents.send('launcher-update', { state: 'available' });
-        });
-        autoUpdater.on('download-progress', (p) => {
-            if (mainWindow) mainWindow.webContents.send('launcher-update', { state: 'downloading', progress: p.percent });
-        });
-        autoUpdater.on('update-downloaded', () => {
-            if (mainWindow) {
-                mainWindow.webContents.send('launcher-update', { state: 'downloaded' });
-                setTimeout(() => autoUpdater.quitAndInstall(), 1500);
+    log.info('Initializing launcher auto update...');
+    autoUpdater.on('error', (error) => {
+        log.error('Update error:', error == null ? "unknown" : (error.stack || error).toString());
+    });
+
+    autoUpdater.on('update-not-available', () => {
+        log.info('Update not available.');
+    });
+
+    autoUpdater.on('update-available', () => {
+        log.info('Update available, starting download...');
+    });
+
+    autoUpdater.on('update-downloaded', () => {
+        log.info('Update downloaded, showing update window.');
+        
+        if (mainWindow) {
+            mainWindow.close();
+        }
+        if (nicknameWindow) {
+            nicknameWindow.close();
+        }
+
+        updateWindow = new BrowserWindow({
+            width: 450,
+            height: 250,
+            frame: false,
+            resizable: false,
+            movable: true,
+            transparent: true,
+            backgroundColor: '#00000000',
+            alwaysOnTop: true,
+            center: true,
+            webPreferences: {
+                nodeIntegration: true,
+                contextIsolation: false
             }
         });
-        autoUpdater.checkForUpdatesAndNotify();
-    } catch (e) {
-        console.error('AutoUpdater error:', e);
+
+        updateWindow.loadFile('src/update.html');
+
+        updateWindow.on('closed', () => {
+            updateWindow = null;
+        });
+
+        setTimeout(() => {
+            if (!updateWindow) return; // It might have been closed
+            log.info('Quitting and installing update...');
+            try {
+                autoUpdater.quitAndInstall(true, true);
+            } catch (e) {
+                log.error('Error during quitAndInstall:', e);
+                app.quit();
+            }
+        }, 5000); // 5 seconds to read the message
+    });
+
+    // Check for updates silently
+    try {
+        autoUpdater.checkForUpdates();
+    } catch(e) {
+        log.error('Error checking for updates:', e);
     }
 }
 
@@ -415,7 +462,7 @@ async function updateSAMPRegistry(gtaExePath) {
         await runReg(['ADD', key, '/v', 'gta_sa_exe_last', '/t', 'REG_SZ', '/d', gtaExePath, '/f']);
         console.log('? Registro SAMP actualizado (vista por defecto):', gtaExePath);
         return;
-    } catch (e1) {
+    } catch (e1) { 
         console.warn('Fallo vista por defecto, reintentando /reg:32', e1.message);
     }
 
@@ -424,7 +471,7 @@ async function updateSAMPRegistry(gtaExePath) {
         await runReg(['ADD', key, '/v', 'gta_sa_exe_last', '/t', 'REG_SZ', '/d', gtaExePath, '/f', '/reg:32']);
         console.log('? Registro SAMP actualizado (/reg:32):', gtaExePath);
         return;
-    } catch (e2) {
+    } catch (e2) { 
         console.warn('Fallo /reg:32, reintentando /reg:64', e2.message);
     }
 
