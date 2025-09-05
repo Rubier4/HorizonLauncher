@@ -170,9 +170,7 @@ playBtn.addEventListener('click', () => {
         alert('El servidor está actualmente offline. Por favor, intenta más tarde.');
         return;
     }
-    playBtn.style.display = 'none';
-    progressContainer.style.display = 'block';
-    ipcRenderer.send('start-game');
+    ipcRenderer.send('open-nickname-window');
 });
 
 ipcRenderer.on('download-progress', (event, data) => {
@@ -245,12 +243,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     try {
         const version = await ipcRenderer.invoke('app-version');
         const versionNode = document.getElementById('app-version');
-        if (versionNode) versionNode.textContent = `v${version}`;
+        if (versionNode) versionNode.textContent = version; // quedará como "Launcher v1.0.22"
     } catch (e) {
         console.warn('No se pudo obtener versión:', e);
     }
 
     ipcRenderer.send('get-installation-path');
     ipcRenderer.send('request-server-info');
-    ipcRenderer.send('request-statistics');
 });

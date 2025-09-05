@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ingresar Nickname</title>
+    <style>
+        :root {
+            --primary: #ffffff;
+            --bg-dark: #0c1a0a;
+            --bg-card: rgba(15, 20, 33, 0.95);
+            --border: rgba(255, 255, 255, 0.1);
+            --success: #00ff88;
+            --text: #ffffff;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: transparent !important;
+            /* Ventana realmente transparente */
+            color: var(--text);
+            user-select: none;
+            overflow: hidden;
+        }
+
+        /* Fondo clicable (el "fuera del recuadro") */
+        .backdrop {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            /* sin oscurecer para parecer una "ventana pequeña" */
+        }
+
+        /* Recuadro */
+        .card {
+            width: 360px;
+            max-width: calc(100% - 24px);
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, .45);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+            -webkit-app-region: no-drag;
+            /* el contenido no se arrastra */
+
+            /* Animación de entrada (POP) */
+            transform: scale(0.92);
+            opacity: 0;
+            animation: pop-in 220ms cubic-bezier(.2, .8, .2, 1) forwards;
+            will-change: transform, opacity;
+        }
+
+        @keyframes pop-in {
+            0% {
+                opacity: 0;
+                transform: scale(0.92);
+                filter: blur(1px);
+            }
+
+            60% {
+                opacity: 1;
+                transform: scale(1.03);
+                filter: blur(0);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* Animación de salida opcional (cuando cerramos desde el propio modal) */
+        .card.pop-out {
+            animation: pop-out 180ms ease-in forwards;
+        }
+
+        @keyframes pop-out {
+            from {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            to {
+                opacity: 0;
+                transform: scale(0.96);
+            }
+        }
+
+        /* Zona superior draggable para mover la ventana */
+        .card-header {
+            width: 100%;
+            text-align: center;
+            margin-bottom: 6px;
+            -webkit-app-region: drag;
+        }
+
+        .card-header h3 {
+            margin: 0;
+            font-size: 18px;
+            color: var(--primary);
+        }
+
+        input {
+            width: 100%;
+            max-width: 300px;
+            padding: 12px;
+            text-align: center;
+            font-size: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--primary);
+            outline: none;
+            transition: all .2s ease;
+        }
+
+        input:focus {
+            border-color: var(--success);
+            box-shadow: 0 0 10px rgba(0, 255, 136, .3);
+        }
+
+        button {
+            padding: 10px 32px;
+            border-radius: 24px;
+            border: 2px solid #00ff88;
+            background: linear-gradient(135deg, #00ff88, #00cc6a);
+            color: #fff;
+            font-weight: 700;
+            letter-spacing: .5px;
+            cursor: pointer;
+            transition: all .2s ease;
+            text-transform: uppercase;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 20px rgba(0, 255, 136, .25);
+        }
+
+        /* Respeta usuarios con reducción de movimiento */
+        @media (prefers-reduced-motion: reduce) {
+            .card {
+                animation: none;
+                opacity: 1;
+                transform: none;
+            }
+
+            .card.pop-out {
+                animation: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="backdrop" id="backdrop">
+        <div class="card" id="card">
+            <div class="card-header">
+                <h3>Ingresa tu Nombre_Apellido</h3>
+            </div>
+            <input type="text" id="nickname-modal-input" placeholder="Nombre_Apellido" spellcheck="false" />
+            <button id="confirm-nickname">Confirmar y Jugar</button>
+        </div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        // Rellenar con el valor actual del registro
+        ipcRenderer.on('nickname-current', (_e, nickname) => {
+            const input = document.getElementById('nickname-modal-input');
+            input.value = nickname || '';
+            setTimeout(() => input.focus(), 50);
+        });
+
+        // Pedir el nickname actual al cargar
+        window.addEventListener('DOMContentLoaded', () => {
+            ipcRenderer.send('get-nickname');
+        });
+
+        // Confirmar y jugar
+        const confirm = () => {
+            const nickname = document.getElementById('nickname-modal-input').value.trim();
+            if (!/^[A-Za-z0-9_]+_[A-Za-z0-9_]+$/.test(nickname)) {
+                alert('Por favor ingresa un nickname válido en formato Nombre_Apellido');
+                return;
+            }
+            ipcRenderer.send('save-nickname-and-play', nickname);
+        };
+        document.getElementById('confirm-nickname').addEventListener('click', confirm);
+
+        // Animación de salida antes de cerrar (cuando cerramos desde el propio modal)
+        function animateExitAndClose() {
+            const card = document.getElementById('card');
+            card.classList.add('pop-out');
+            card.style.pointerEvents = 'none';
+            setTimeout(() => ipcRenderer.send('close-nickname'), 170); // sincronizado con 180ms de pop-out
+        }
+
+        // Enter = confirmar, Escape = cerrar con animación
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') confirm();
+            if (e.key === 'Escape') animateExitAndClose();
+        });
+
+        // Cerrar si clicas en el fondo (fuera de la tarjeta)
+        const backdrop = document.getElementById('backdrop');
+        backdrop.addEventListener('click', (e) => {
+            if (e.target === backdrop) animateExitAndClose();
+        });
+
+        // Evitar que el click dentro del recuadro burbujee al fondo
+        document.getElementById('card').addEventListener('click', (e) => e.stopPropagation());
+    </script>
+</body>
+
+</html>
