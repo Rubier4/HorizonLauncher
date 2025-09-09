@@ -14,7 +14,7 @@
     },
     "launcher": {
         "version": "1.0.0",
-        "gameDownloadUrl": "https://horizonrp.es/HZGTA",
+        "gameDownloadUrl": "https://horizonrp.es/HZGTA/",
         "updateUrl": "https://api.horizonrp.es/launcher/update",
         "newsApiUrl": "https://api.horizonrp.es/news"
     }

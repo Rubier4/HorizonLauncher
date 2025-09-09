@@ -89,7 +89,7 @@ function positionNicknameWindow() {
 }
 
 
-const GTA_MANIFEST_URL = 'https://horizonrp.es/downloads/manifest.json';
+const GTA_MANIFEST_URL = 'https://horizonrp.es/HZGTA/manifest.json';
 
 // Utilidades versin local
 function getLocalGameVersion() {
@@ -245,16 +245,16 @@ async function downloadAndInstallGTA(filesToUpdate) {
             downloadedFiles++;
         }
 
-        // Actualizar versión local si existe en el manifest
+        // Actualizar versiï¿½n local si existe en el manifest
         if (mainWindow) {
             mainWindow.webContents.send('download-progress', {
                 percent: 100,
-                message: 'Actualización completa'
+                message: 'Actualizaciï¿½n completa'
             });
             mainWindow.webContents.send('download-complete');
         }
 
-        console.log(`Actualización completada: ${totalFiles} archivos actualizados`);
+        console.log(`Actualizaciï¿½n completada: ${totalFiles} archivos actualizados`);
 
     } catch (e) {
         console.error('Error actualizando archivos:', e);
@@ -822,7 +822,7 @@ async function downloadGame() {
     downloadActive = true;
 
     try {
-        // Marcar instalación
+        // Marcar instalaciï¿½n
         const markerFile = path.join(CONFIG.gtaPath, '.horizonrp');
         fs.writeFileSync(markerFile, JSON.stringify({
             version: '1.0.0',
