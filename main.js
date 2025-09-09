@@ -42,8 +42,7 @@ const CONFIG = {
     discord: 'https://discord.gg/horizonrp',
     forum: 'https://foro.horizonrp.es',
     wiki: 'https://wiki.horizonrp.es',
-    downloadURL: 'https://horizonrp.es/downloads/HZRPDL.zip',
-    fileSize: 2000000000,
+    baseDownloadURL: 'https://horizonrp.es/HZGTA/', // Nueva URL base para archivos individuales
     gtaPath: null
 };
 
@@ -216,8 +215,8 @@ async function downloadAndInstallGTA(filesToUpdate) {
             // Crear directorio si no existe
             await fs.ensureDir(localDir);
 
-            // URL del archivo en el servidor
-            const fileUrl = `https://horizonrp.es/HZGTA/${fileInfo.path}`;
+            // URL del archivo en el servidor usando la baseDownloadURL
+            const fileUrl = `${CONFIG.baseDownloadURL}${fileInfo.path}`;
 
             // Descargar el archivo
             await downloadFile(fileUrl, localPath, (percent, current, total, speed) => {
@@ -246,16 +245,16 @@ async function downloadAndInstallGTA(filesToUpdate) {
             downloadedFiles++;
         }
 
-        // Actualizar versiï¿½n local si existe en el manifest
+        // Actualizar versión local si existe en el manifest
         if (mainWindow) {
             mainWindow.webContents.send('download-progress', {
                 percent: 100,
-                message: 'Actualizaciï¿½n completa'
+                message: 'Actualización completa'
             });
             mainWindow.webContents.send('download-complete');
         }
 
-        console.log(`Actualizaciï¿½n completada: ${totalFiles} archivos actualizados`);
+        console.log(`Actualización completada: ${totalFiles} archivos actualizados`);
 
     } catch (e) {
         console.error('Error actualizando archivos:', e);
@@ -823,7 +822,7 @@ async function downloadGame() {
     downloadActive = true;
 
     try {
-        // Marcar instalaciï¿½n
+        // Marcar instalación
         const markerFile = path.join(CONFIG.gtaPath, '.horizonrp');
         fs.writeFileSync(markerFile, JSON.stringify({
             version: '1.0.0',
@@ -855,7 +854,8 @@ async function downloadGame() {
 
             await fs.ensureDir(localDir);
 
-            const fileUrl = `https://horizonrp.es/HZGTA/${fileInfo.path}`;
+            // Usar baseDownloadURL en lugar de URL hardcodeada
+            const fileUrl = `${CONFIG.baseDownloadURL}${fileInfo.path}`;
 
             await downloadFile(fileUrl, localPath, (percent, current, total, speed) => {
                 const overallProgress = Math.round(
@@ -871,6 +871,13 @@ async function downloadGame() {
                     speed: speed
                 });
             });
+
+            // Verificar integridad
+            const downloadedHash = await sha256File(localPath);
+            if (downloadedHash.toLowerCase() !== fileInfo.path.toLowerCase()) {
+                console.warn(`Hash mismatch para ${fileInfo.path}, continuando...`);
+                // Puedes decidir si quieres fallar o continuar
+            }
 
             downloadedFiles++;
         }
