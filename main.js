@@ -130,6 +130,10 @@ function isNewer(remote, local) {
 }
 function sha256File(filePath) {
     return new Promise((resolve, reject) => {
+        if (!fs.existsSync(filePath)) {
+            resolve(null); // Si no existe, retorna null
+            return;
+        }
         const hash = crypto.createHash('sha256');
         const rs = fs.createReadStream(filePath);
         rs.on('data', d => hash.update(d));
@@ -145,86 +149,123 @@ async function initGameAutoUpdate() {
         const baseDir = app.isPackaged ? path.dirname(process.execPath) : path.join(app.getPath('home'), 'Horizon RP Dev');
         if (!CONFIG.gtaPath) CONFIG.gtaPath = path.join(baseDir, 'GTA Horizon');
 
+        // Descargar el nuevo manifest detallado
         const { data: manifest } = await axios.get(GTA_MANIFEST_URL, { timeout: 8000 });
-        if (!manifest || !manifest.version || !manifest.zip || !manifest.sha256) {
-            console.warn('Manifest invlido', manifest);
+        if (!manifest || !manifest.files || !Array.isArray(manifest.files)) {
+            console.warn('Manifest inv�lido', manifest);
             return;
         }
 
-        const localVersion = getLocalGameVersion();
+        // Si no existe la carpeta del GTA, no hacer auto-update (primera instalaci�n)
         if (!fs.existsSync(CONFIG.gtaPath)) {
             console.log('GTA no instalado.');
             return;
         }
 
-        if (isNewer(manifest.version, localVersion)) {
-            console.log(`Actualizacin GTA disponible: ${localVersion} -> ${manifest.version}`);
-            if (mainWindow) mainWindow.webContents.send('game-update', { state: 'available', version: manifest.version });
-            await downloadAndInstallGTA(manifest);
+        // Verificar qu� archivos necesitan actualizaci�n
+        const filesToUpdate = [];
+        let totalUpdateSize = 0;
+
+        for (const fileInfo of manifest.files) {
+            const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
+            const localHash = await sha256File(localPath);
+
+            if (!localHash || localHash.toLowerCase() !== fileInfo.hash.toLowerCase()) {
+                filesToUpdate.push(fileInfo);
+                totalUpdateSize += fileInfo.size;
+            }
+        }
+
+        if (filesToUpdate.length > 0) {
+            console.log(`Actualizaci�n disponible: ${filesToUpdate.length} archivos (${formatBytes(totalUpdateSize)})`);
+            if (mainWindow) {
+                mainWindow.webContents.send('game-update', {
+                    state: 'available',
+                    filesCount: filesToUpdate.length,
+                    totalSize: totalUpdateSize
+                });
+            }
+            await downloadAndInstallGTA(filesToUpdate);
         } else {
-            console.log('GTA est actualizado:', localVersion);
-            if (mainWindow) mainWindow.webContents.send('game-update', { state: 'uptodate', version: localVersion });
+            console.log('GTA est� actualizado');
+            if (mainWindow) mainWindow.webContents.send('game-update', { state: 'uptodate' });
         }
     } catch (e) {
         console.warn('No se pudo verificar manifest GTA:', e.message);
     }
 }
 
-async function downloadAndInstallGTA(manifest) {
-    const tempDir = path.join(app.getPath('userData'), 'temp');
-    await fs.ensureDir(tempDir);
-    const tempZip = path.join(tempDir, `GTAHorizon - ${manifest.version}.zip`);
+async function downloadAndInstallGTA(filesToUpdate) {
+    if (filesToUpdate.length === 0) return;
 
-    if (mainWindow) mainWindow.webContents.send('download-progress', { percent: 0, message: 'Actualizacin de GTA: conectando...' });
+    let downloadedFiles = 0;
+    const totalFiles = filesToUpdate.length;
 
-    await downloadFile(manifest.zip, tempZip, (percent, current, total, speed) => {
-        if (mainWindow) {
-            mainWindow.webContents.send('download-progress', {
-                percent,
-                message: 'Actualizando GTA...',
-                current, total, speed
-            });
-        }
-    });
-
-    const actualSha = (await sha256File(tempZip)).toLowerCase();
-    if (actualSha !== manifest.sha256.toLowerCase()) {
-        throw new Error('Integridad fallida (SHA-256 no coincide)');
+    if (mainWindow) {
+        mainWindow.webContents.send('download-progress', {
+            percent: 0,
+            message: `Actualizando ${totalFiles} archivos...`
+        });
     }
 
-    const backupDir = path.join(path.dirname(CONFIG.gtaPath), `GTA Horizon_backup_${Date.now()}`);
     try {
-        if (fs.existsSync(CONFIG.gtaPath)) {
-            await fs.rename(CONFIG.gtaPath, backupDir);
-        }
-        await fs.ensureDir(CONFIG.gtaPath);
+        for (const fileInfo of filesToUpdate) {
+            const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
+            const localDir = path.dirname(localPath);
 
-        await extractZip(tempZip, CONFIG.gtaPath, (progress) => {
-            if (mainWindow) {
-                mainWindow.webContents.send('download-progress', {
-                    percent: progress,
-                    message: 'Instalando actualización...',
-                });
+            // Crear directorio si no existe
+            await fs.ensureDir(localDir);
+
+            // URL del archivo en el servidor
+            const fileUrl = `https://horizonrp.es/HZGTA/${fileInfo.path}`;
+
+            // Descargar el archivo
+            await downloadFile(fileUrl, localPath, (percent, current, total, speed) => {
+                const overallProgress = Math.round(
+                    ((downloadedFiles / totalFiles) * 100) +
+                    (percent / totalFiles)
+                );
+
+                if (mainWindow) {
+                    mainWindow.webContents.send('download-progress', {
+                        percent: overallProgress,
+                        message: `Actualizando archivo ${downloadedFiles + 1}/${totalFiles}...`,
+                        current,
+                        total,
+                        speed
+                    });
+                }
+            });
+
+            // Verificar integridad del archivo descargado
+            const downloadedHash = await sha256File(localPath);
+            if (downloadedHash.toLowerCase() !== fileInfo.hash.toLowerCase()) {
+                throw new Error(`Error de integridad en ${fileInfo.path}`);
             }
-        });
 
-        setLocalGameVersion(manifest.version);
+            downloadedFiles++;
+        }
+
+        // Actualizar versi�n local si existe en el manifest
         if (mainWindow) {
-            mainWindow.webContents.send('download-progress', { percent: 100, message: 'Actualizacin completa' });
+            mainWindow.webContents.send('download-progress', {
+                percent: 100,
+                message: 'Actualizaci�n completa'
+            });
             mainWindow.webContents.send('download-complete');
         }
 
-        await fs.remove(tempZip);
-        await fs.remove(backupDir).catch(() => { });
+        console.log(`Actualizaci�n completada: ${totalFiles} archivos actualizados`);
+
     } catch (e) {
-        if (fs.existsSync(backupDir)) {
-            await fs.remove(CONFIG.gtaPath).catch(() => { });
-            await fs.rename(backupDir, CONFIG.gtaPath).catch(() => { });
+        console.error('Error actualizando archivos:', e);
+        if (mainWindow) {
+            mainWindow.webContents.send('download-error', e.message);
         }
-        await fs.remove(tempZip).catch(() => { });
         throw e;
     }
 }
+
 
 // Config persistente del launcher
 function loadConfig() {
@@ -769,7 +810,6 @@ async function checkGameInstalled() {
 }
 
 async function downloadGame() {
-    // helper para enviar SIEMPRE al mainWindow
     const send = (ch, payload) => {
         try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(ch, payload); } catch { }
     };
@@ -783,38 +823,59 @@ async function downloadGame() {
     downloadActive = true;
 
     try {
+        // Marcar instalaci�n
         const markerFile = path.join(CONFIG.gtaPath, '.horizonrp');
         fs.writeFileSync(markerFile, JSON.stringify({
             version: '1.0.0',
             server: CONFIG.serverName,
             installedAt: new Date().toISOString()
         }));
-        const tempDir = path.join(app.getPath('userData'), 'temp');
-        await fs.ensureDir(tempDir);
-        const tempFile = path.join(tempDir, 'GTA_HorizonRP.zip');
 
-        send('download-progress', { percent: 0, message: 'Conectando con el servidor...' });
+        // Descargar manifest para obtener lista de archivos
+        send('download-progress', { percent: 0, message: 'Obteniendo lista de archivos...' });
 
-        await downloadFile(CONFIG.downloadURL, tempFile, (progress, downloaded, total, speed) => {
-            send('download-progress', {
-                percent: progress,
-                message: 'Descargando archivos del juego...',
-                current: downloaded,
-                total: total,
-                speed: speed
-            });
+        const { data: manifest } = await axios.get(GTA_MANIFEST_URL, { timeout: 8000 });
+        if (!manifest || !manifest.files) {
+            throw new Error('No se pudo obtener la lista de archivos');
+        }
+
+        const totalFiles = manifest.files.length;
+        let downloadedFiles = 0;
+        let totalSize = manifest.files.reduce((acc, f) => acc + f.size, 0);
+
+        send('download-progress', {
+            percent: 0,
+            message: `Descargando ${totalFiles} archivos (${formatBytes(totalSize)})...`
         });
 
-        await extractZip(tempFile, CONFIG.gtaPath, (progress) => {
-            send('download-progress', {
-                percent: progress,
-                message: 'Descomprimiendo...',
+        // Descargar cada archivo
+        for (const fileInfo of manifest.files) {
+            const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
+            const localDir = path.dirname(localPath);
+
+            await fs.ensureDir(localDir);
+
+            const fileUrl = `https://horizonrp.es/HZGTA/${fileInfo.path}`;
+
+            await downloadFile(fileUrl, localPath, (percent, current, total, speed) => {
+                const overallProgress = Math.round(
+                    (downloadedFiles / totalFiles) * 100 +
+                    (percent / totalFiles)
+                );
+
+                send('download-progress', {
+                    percent: overallProgress,
+                    message: `Descargando archivo ${downloadedFiles + 1}/${totalFiles}...`,
+                    current: current,
+                    total: total,
+                    speed: speed
+                });
             });
-        });
 
-        await fs.remove(tempFile);
-        await fs.remove(tempDir);
+            downloadedFiles++;
+        }
 
+        // Verificar que los archivos principales existan
         const gameFiles = findGameFiles(CONFIG.gtaPath);
         if (gameFiles['gta_sa.exe'] && gameFiles['samp.exe']) {
             saveConfig();
@@ -826,7 +887,7 @@ async function downloadGame() {
                 if (!result.success) send('game-error', result.message);
             }, 2000);
         } else {
-            throw new Error('Archivos del juego no encontrados en el ZIP');
+            throw new Error('Archivos del juego no encontrados');
         }
     } catch (error) {
         downloadActive = false;
