@@ -14,7 +14,7 @@ const log = require('electron-log');
 autoUpdater.logger = log;
 autoUpdater.logger.transports.file.level = 'info';
 
-// Configurar regedit para usar VBS (necesario si en algn momento usas su API)
+// Configurar regedit para usar VBS (necesario si en algún momento usas su API)
 const vbsPath = app.isPackaged
     ? path.join(process.resourcesPath, 'regedit', 'vbs')
     : path.join(__dirname, 'node_modules', 'regedit', 'vbs');
@@ -33,7 +33,7 @@ let checkingUpdatesWindow = null;
 let downloadActive = false;
 const gameAPI = new GameAPI();
 
-// Configuracin del servidor
+// Configuración del servidor
 const CONFIG = {
     serverName: 'Horizon Roleplay',
     serverIP: '195.26.252.73',
@@ -42,15 +42,15 @@ const CONFIG = {
     discord: 'https://discord.gg/horizonrp',
     forum: 'https://foro.horizonrp.es',
     wiki: 'https://wiki.horizonrp.es',
-    baseDownloadURL: 'https://horizonrp.es/HZGTA/', // Nueva URL base para archivos individuales
+    baseDownloadURL: 'https://horizonrp.es/HZGTA/', // URL base para archivos individuales
     gtaPath: null
 };
 
-const TITLEBAR_H = 32; // alto de tu barra de ttulo custom
+const TITLEBAR_H = 32; // alto de tu barra de título custom
 
 // Ajustes manuales para mover la ventana (px)
-const OFFSET_X = -15;  // positivo ? ms a la derecha, negativo ? ms a la izquierda
-const OFFSET_Y = -5; // positivo ? ms abajo, negativo ? ms arriba
+const OFFSET_X = -15;  // positivo ? más a la derecha, negativo ? más a la izquierda
+const OFFSET_Y = -5; // positivo ? más abajo, negativo ? más arriba
 
 function getSidebarWidth(winWidth) {
     return winWidth <= 1200 ? 250 : 280;
@@ -69,13 +69,13 @@ function positionNicknameWindow() {
     const sidebarW = getSidebarWidth(mainB.width);
     const pad = getContentPadding(mainB.width);
 
-    // rea til horizontal
+    // Área útil horizontal
     const rightW = mainB.width - sidebarW - (pad * 2);
     let x = Math.round(
         mainB.x + sidebarW + pad + (rightW - modalB.width) / 2
     );
 
-    // rea til vertical
+    // Área útil vertical
     const rightH = mainB.height - TITLEBAR_H - (pad * 2);
     let y = Math.round(
         mainB.y + TITLEBAR_H + pad + (rightH - modalB.height) / 2
@@ -88,10 +88,9 @@ function positionNicknameWindow() {
     nicknameWindow.setPosition(x, y);
 }
 
-
 const GTA_MANIFEST_URL = 'https://horizonrp.es/manifest.json';
 
-// Utilidades versin local
+// Utilidades versión local
 function getLocalGameVersion() {
     try {
         if (!CONFIG.gtaPath) return '0.0.0';
@@ -102,6 +101,7 @@ function getLocalGameVersion() {
         return '0.0.0';
     }
 }
+
 function setLocalGameVersion(newVersion) {
     try {
         if (!CONFIG.gtaPath) return;
@@ -116,6 +116,7 @@ function setLocalGameVersion(newVersion) {
         console.warn('No se pudo guardar version local:', e.message);
     }
 }
+
 // Semver simple
 function isNewer(remote, local) {
     const r = remote.split('.').map(n => parseInt(n, 10) || 0);
@@ -127,6 +128,7 @@ function isNewer(remote, local) {
     }
     return false;
 }
+
 function sha256File(filePath) {
     return new Promise((resolve, reject) => {
         if (!fs.existsSync(filePath)) {
@@ -141,42 +143,255 @@ function sha256File(filePath) {
     });
 }
 
-// Auto-update del juego (manifest)
+// NUEVA FUNCIÓN: Descarga paralela con control de concurrencia
+async function downloadFilesParallel(files, maxConcurrent = 3) { // Reducido a 3 simultáneos
+    const send = (ch, payload) => {
+        try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(ch, payload); } catch { }
+    };
+
+    let completedFiles = 0;
+    let failedFiles = [];
+    const totalFiles = files.length;
+    let totalBytes = 0;
+    let downloadedBytes = 0;
+
+    // Calcular tamaño total
+    files.forEach(f => totalBytes += f.size || 0);
+
+    // Función para descargar con reintentos
+    const downloadWithRetry = async (fileInfo, retries = 3) => {
+        for (let attempt = 1; attempt <= retries; attempt++) {
+            try {
+                console.log(`Descargando ${fileInfo.path} (intento ${attempt}/${retries})`);
+                await downloadSingleFile(fileInfo);
+                return true;
+            } catch (error) {
+                console.error(`Error en ${fileInfo.path}, intento ${attempt}:`, error.message);
+                if (attempt === retries) {
+                    failedFiles.push(fileInfo);
+                    return false;
+                }
+                // Esperar un poco antes de reintentar
+                await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+            }
+        }
+    };
+
+    // Función para descargar un archivo individual
+    const downloadSingleFile = (fileInfo) => {
+        return new Promise((resolve, reject) => {
+            const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
+            const localDir = path.dirname(localPath);
+
+            // Crear directorio
+            fs.ensureDirSync(localDir);
+
+            // Si el archivo ya existe con el hash correcto, saltar
+            if (fs.existsSync(localPath)) {
+                sha256File(localPath).then(hash => {
+                    if (hash && hash.toLowerCase() === fileInfo.hash.toLowerCase()) {
+                        console.log(`Archivo ${fileInfo.path} ya existe y es válido, saltando...`);
+                        completedFiles++;
+                        resolve();
+                        return;
+                    }
+                });
+            }
+
+            const fileUrl = `${CONFIG.baseDownloadURL}${fileInfo.path}`;
+            const file = fs.createWriteStream(localPath);
+            let fileDownloadedBytes = 0;
+            let timeout;
+
+            // Timeout de 30 segundos por archivo
+            timeout = setTimeout(() => {
+                file.close();
+                try { fs.unlinkSync(localPath); } catch { }
+                reject(new Error(`Timeout descargando ${fileInfo.path}`));
+            }, 30000);
+
+            const request = https.get(fileUrl, (response) => {
+                if (response.statusCode === 301 || response.statusCode === 302) {
+                    file.close();
+                    try { fs.unlinkSync(localPath); } catch { }
+                    clearTimeout(timeout);
+
+                    // Seguir redirección
+                    https.get(response.headers.location, (redirectResponse) => {
+                        handleResponse(redirectResponse);
+                    }).on('error', handleError);
+                    return;
+                }
+
+                if (response.statusCode !== 200) {
+                    file.close();
+                    try { fs.unlinkSync(localPath); } catch { }
+                    clearTimeout(timeout);
+                    reject(new Error(`HTTP ${response.statusCode} para ${fileInfo.path}`));
+                    return;
+                }
+
+                handleResponse(response);
+            });
+
+            request.on('error', handleError);
+            request.on('timeout', () => {
+                request.destroy();
+                handleError(new Error('Request timeout'));
+            });
+
+            function handleError(err) {
+                clearTimeout(timeout);
+                file.close();
+                try { fs.unlinkSync(localPath); } catch { }
+                reject(err);
+            }
+
+            function handleResponse(res) {
+                res.on('data', (chunk) => {
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => {
+                        file.close();
+                        try { fs.unlinkSync(localPath); } catch { }
+                        reject(new Error(`Timeout durante descarga de ${fileInfo.path}`));
+                    }, 30000);
+
+                    fileDownloadedBytes += chunk.length;
+                    downloadedBytes += chunk.length;
+
+                    const globalProgress = Math.round((completedFiles / totalFiles) * 100);
+
+                    send('download-progress', {
+                        percent: globalProgress,
+                        message: `Descargando archivo ${completedFiles + 1}/${totalFiles}: ${path.basename(fileInfo.path)}`,
+                        current: downloadedBytes,
+                        total: totalBytes
+                    });
+                });
+
+                res.pipe(file);
+
+                file.on('finish', async () => {
+                    clearTimeout(timeout);
+                    file.close();
+
+                    // Verificar hash
+                    try {
+                        const downloadedHash = await sha256File(localPath);
+                        if (!downloadedHash || downloadedHash.toLowerCase() !== fileInfo.hash.toLowerCase()) {
+                            console.warn(`Hash incorrecto para ${fileInfo.path}`);
+                            try { fs.unlinkSync(localPath); } catch { }
+                            reject(new Error(`Hash incorrecto para ${fileInfo.path}`));
+                            return;
+                        }
+                    } catch (e) {
+                        reject(e);
+                        return;
+                    }
+
+                    completedFiles++;
+                    console.log(`? Completado ${completedFiles}/${totalFiles}: ${fileInfo.path}`);
+                    resolve();
+                });
+
+                file.on('error', (err) => {
+                    clearTimeout(timeout);
+                    file.close();
+                    try { fs.unlinkSync(localPath); } catch { }
+                    reject(err);
+                });
+            }
+        });
+    };
+
+    // Procesar archivos en lotes con reintentos
+    console.log(`Iniciando descarga de ${files.length} archivos con ${maxConcurrent} simultáneos...`);
+
+    for (let i = 0; i < files.length; i += maxConcurrent) {
+        const batch = files.slice(i, Math.min(i + maxConcurrent, files.length));
+
+        console.log(`Procesando lote ${Math.floor(i / maxConcurrent) + 1}/${Math.ceil(files.length / maxConcurrent)}`);
+
+        await Promise.all(
+            batch.map(file => downloadWithRetry(file, 3))
+        );
+
+        // Pequeña pausa entre lotes para no saturar
+        if (i + maxConcurrent < files.length) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    }
+
+    if (failedFiles.length > 0) {
+        console.error(`Archivos que fallaron (${failedFiles.length}):`, failedFiles.map(f => f.path));
+        throw new Error(`No se pudieron descargar ${failedFiles.length} archivos`);
+    }
+
+    console.log(`? Descarga completa: ${completedFiles} archivos`);
+}
+
+// Auto-update del juego mejorado
 async function initGameAutoUpdate() {
     try {
         if (!CONFIG.gtaPath) loadConfig();
         const baseDir = app.isPackaged ? path.dirname(process.execPath) : path.join(app.getPath('home'), 'Horizon RP Dev');
         if (!CONFIG.gtaPath) CONFIG.gtaPath = path.join(baseDir, 'GTA Horizon');
 
-        // Descargar el nuevo manifest detallado
         const { data: manifest } = await axios.get(GTA_MANIFEST_URL, { timeout: 8000 });
         if (!manifest || !manifest.files || !Array.isArray(manifest.files)) {
-            console.warn('Manifest invï¿½lido', manifest);
+            console.warn('Manifest inválido', manifest);
             return;
         }
 
-        // Si no existe la carpeta del GTA, no hacer auto-update (primera instalaciï¿½n)
         if (!fs.existsSync(CONFIG.gtaPath)) {
             console.log('GTA no instalado.');
             return;
         }
 
-        // Verificar quï¿½ archivos necesitan actualizaciï¿½n
+        // Verificar archivos con más detalle
         const filesToUpdate = [];
         let totalUpdateSize = 0;
+        let checkedFiles = 0;
+
+        console.log(`Verificando ${manifest.files.length} archivos...`);
 
         for (const fileInfo of manifest.files) {
-            const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
-            const localHash = await sha256File(localPath);
+            checkedFiles++;
 
-            if (!localHash || localHash.toLowerCase() !== fileInfo.hash.toLowerCase()) {
+            // Mostrar progreso de verificación cada 50 archivos
+            if (checkedFiles % 50 === 0) {
+                console.log(`Verificados ${checkedFiles}/${manifest.files.length} archivos...`);
+            }
+
+            const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
+
+            // Si no existe, añadir a la lista
+            if (!fs.existsSync(localPath)) {
                 filesToUpdate.push(fileInfo);
-                totalUpdateSize += fileInfo.size;
+                totalUpdateSize += fileInfo.size || 0;
+                continue;
+            }
+
+            // Verificar hash solo si el tamaño es diferente (más rápido)
+            const stats = fs.statSync(localPath);
+            if (stats.size !== fileInfo.size) {
+                filesToUpdate.push(fileInfo);
+                totalUpdateSize += fileInfo.size || 0;
+                continue;
+            }
+
+            // Para archivos pequeños, verificar hash
+            if (stats.size < 1024 * 1024) { // Menos de 1MB
+                const localHash = await sha256File(localPath);
+                if (!localHash || localHash.toLowerCase() !== fileInfo.hash.toLowerCase()) {
+                    filesToUpdate.push(fileInfo);
+                    totalUpdateSize += fileInfo.size || 0;
+                }
             }
         }
 
         if (filesToUpdate.length > 0) {
-            console.log(`Actualizaciï¿½n disponible: ${filesToUpdate.length} archivos (${formatBytes(totalUpdateSize)})`);
+            console.log(`Actualización disponible: ${filesToUpdate.length} archivos (${formatBytes(totalUpdateSize)})`);
             if (mainWindow) {
                 mainWindow.webContents.send('game-update', {
                     state: 'available',
@@ -184,87 +399,25 @@ async function initGameAutoUpdate() {
                     totalSize: totalUpdateSize
                 });
             }
-            await downloadAndInstallGTA(filesToUpdate);
+
+            // Usar menos conexiones simultáneas para actualizaciones
+            await downloadFilesParallel(filesToUpdate, 3);
+
+            if (mainWindow) {
+                mainWindow.webContents.send('download-progress', {
+                    percent: 100,
+                    message: 'Actualización completa'
+                });
+                mainWindow.webContents.send('download-complete');
+            }
         } else {
-            console.log('GTA estï¿½ actualizado');
+            console.log('GTA está actualizado');
             if (mainWindow) mainWindow.webContents.send('game-update', { state: 'uptodate' });
         }
     } catch (e) {
-        console.warn('No se pudo verificar manifest GTA:', e.message);
+        console.warn('Error verificando actualización:', e.message);
     }
 }
-
-async function downloadAndInstallGTA(filesToUpdate) {
-    if (filesToUpdate.length === 0) return;
-
-    let downloadedFiles = 0;
-    const totalFiles = filesToUpdate.length;
-
-    if (mainWindow) {
-        mainWindow.webContents.send('download-progress', {
-            percent: 0,
-            message: `Actualizando ${totalFiles} archivos...`
-        });
-    }
-
-    try {
-        for (const fileInfo of filesToUpdate) {
-            const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
-            const localDir = path.dirname(localPath);
-
-            // Crear directorio si no existe
-            await fs.ensureDir(localDir);
-
-            // URL del archivo en el servidor usando la baseDownloadURL
-            const fileUrl = `${CONFIG.baseDownloadURL}${fileInfo.path}`;
-
-            // Descargar el archivo
-            await downloadFile(fileUrl, localPath, (percent, current, total, speed) => {
-                const overallProgress = Math.round(
-                    ((downloadedFiles / totalFiles) * 100) +
-                    (percent / totalFiles)
-                );
-
-                if (mainWindow) {
-                    mainWindow.webContents.send('download-progress', {
-                        percent: overallProgress,
-                        message: `Actualizando archivo ${downloadedFiles + 1}/${totalFiles}...`,
-                        current,
-                        total,
-                        speed
-                    });
-                }
-            });
-
-            // Verificar integridad del archivo descargado
-            const downloadedHash = await sha256File(localPath);
-            if (downloadedHash.toLowerCase() !== fileInfo.hash.toLowerCase()) {
-                throw new Error(`Error de integridad en ${fileInfo.path}`);
-            }
-
-            downloadedFiles++;
-        }
-
-        // Actualizar versiï¿½n local si existe en el manifest
-        if (mainWindow) {
-            mainWindow.webContents.send('download-progress', {
-                percent: 100,
-                message: 'Actualizaciï¿½n completa'
-            });
-            mainWindow.webContents.send('download-complete');
-        }
-
-        console.log(`Actualizaciï¿½n completada: ${totalFiles} archivos actualizados`);
-
-    } catch (e) {
-        console.error('Error actualizando archivos:', e);
-        if (mainWindow) {
-            mainWindow.webContents.send('download-error', e.message);
-        }
-        throw e;
-    }
-}
-
 
 // Config persistente del launcher
 function loadConfig() {
@@ -274,7 +427,7 @@ function loadConfig() {
             const saved = JSON.parse(fs.readFileSync(configPath, 'utf8'));
             if (saved.gtaPath && fs.existsSync(path.join(saved.gtaPath, '.horizonrp'))) {
                 CONFIG.gtaPath = saved.gtaPath;
-                console.log('? Instalacin cargada:', CONFIG.gtaPath);
+                console.log('? Instalación cargada:', CONFIG.gtaPath);
                 return;
             }
         }
@@ -284,9 +437,10 @@ function loadConfig() {
 
     const baseDir = app.isPackaged ? path.dirname(process.execPath) : path.join(app.getPath('home'), 'Horizon RP Dev');
     CONFIG.gtaPath = path.join(baseDir, 'GTA Horizon');
-    console.log('? Ruta de GTA calculada automticamente:', CONFIG.gtaPath);
+    console.log('? Ruta de GTA calculada automáticamente:', CONFIG.gtaPath);
     saveConfig();
 }
+
 function saveConfig() {
     const configPath = path.join(app.getPath('userData'), 'horizonrp_config.json');
     fs.writeFileSync(configPath, JSON.stringify({
@@ -353,7 +507,7 @@ function initLauncherAutoUpdate() {
     autoUpdater.on('update-available', () => {
         log.info('Update available, starting download...');
         if (checkingUpdatesWindow) {
-            checkingUpdatesWindow.webContents.send('update-message', 'Descargando actualizaciÃ³n...');
+            checkingUpdatesWindow.webContents.send('update-message', 'Descargando actualización...');
         }
     });
 
@@ -412,7 +566,7 @@ function initLauncherAutoUpdate() {
     }
 }
 
-// Inicializar API y timers (sin intervalo para estadsticas)
+// Inicializar API y timers (sin intervalo para estadísticas)
 async function initializeAPI() {
     await gameAPI.initDatabase();
 
@@ -476,9 +630,10 @@ function runReg(args) {
         });
     });
 }
+
 function parseRegQueryValue(stdout, valueName) {
-    // Busca lneas con: valueName   REG_SZ   value
-    const re = new RegExp(`\s${valueName}\s+REG_\w+\s+(.*)`);
+    // Busca líneas con: valueName   REG_SZ   value
+    const re = new RegExp(`\\s${valueName}\\s+REG_\\w+\\s+(.*)`);
     const lines = stdout.split(/\r?\n/);
     for (const line of lines) {
         const m = line.match(re);
@@ -507,6 +662,7 @@ async function getNickname() {
 
     return '';
 }
+
 async function setNickname(nickname) {
     const key = 'HKCU\\Software\\SAMP';
     // Crea clave si no existe
@@ -514,7 +670,7 @@ async function setNickname(nickname) {
 
     // Guarda en PlayerName (principal)
     await runReg(['ADD', key, '/v', 'PlayerName', '/t', 'REG_SZ', '/d', nickname, '/f']).catch(() => { });
-    // Tambin en player_name (compat)
+    // También en player_name (compat)
     await runReg(['ADD', key, '/v', 'player_name', '/t', 'REG_SZ', '/d', nickname, '/f']).catch(() => { });
 }
 
@@ -656,7 +812,7 @@ ipcMain.on('close-window', () => {
             buttons: ['Cancelar descarga y salir', 'Continuar descargando'],
             defaultId: 1,
             message: 'Hay una descarga en progreso',
-            detail: 'Si sales ahora, tendrs que descargar todo de nuevo.'
+            detail: 'Si sales ahora, tendrás que descargar todo de nuevo.'
         });
         if (choice === 1) return;
     }
@@ -670,15 +826,16 @@ ipcMain.on('open-path', (e, folderPath) => {
         shell.openPath(folderPath);
     }
 });
+
 ipcMain.on('request-server-info', async () => { await updateServerInfo(); });
 
-// Estadsticas bajo demanda
+// Estadísticas bajo demanda
 ipcMain.on('request-statistics', async () => {
     const stats = await gameAPI.getStatistics();
     if (mainWindow && stats) mainWindow.webContents.send('statistics-update', stats);
 });
 
-// Versin app
+// Versión app
 ipcMain.handle('app-version', () => app.getVersion());
 
 // Nickname window
@@ -705,7 +862,7 @@ ipcMain.on('open-nickname-window', () => {
 
     nicknameWindow.loadFile('src/nickname.html');
 
-    // Posicionarla cuando est lista
+    // Posicionarla cuando esté lista
     nicknameWindow.once('ready-to-show', () => {
         positionNicknameWindow();
         nicknameWindow.show();
@@ -729,6 +886,7 @@ ipcMain.on('get-nickname', async (event) => {
     const nick = await getNickname();
     event.reply('nickname-current', nick || '');
 });
+
 ipcMain.on('save-nickname-and-play', async (event, nickname) => {
     try { await setNickname(nickname); } catch (e) { console.error('Error guardando nickname:', e); }
     if (nicknameWindow && !nicknameWindow.isDestroyed()) nicknameWindow.close();
@@ -742,14 +900,14 @@ ipcMain.on('save-nickname-and-play', async (event, nickname) => {
     }
 });
 
-// Obtener ruta instalacin (para settings)
+// Obtener ruta instalación (para settings)
 ipcMain.on('get-installation-path', () => {
     if (mainWindow) {
         mainWindow.webContents.send('installation-path', CONFIG.gtaPath || 'No instalado');
     }
 });
 
-// ===== SISTEMA DE INSTALACIN Y JUEGO =====
+// ===== SISTEMA DE INSTALACIÓN Y JUEGO =====
 ipcMain.handle('check-gta-installed', async () => {
     if (!CONFIG.gtaPath) return false;
     const markerFile = path.join(CONFIG.gtaPath, '.horizonrp');
@@ -759,7 +917,9 @@ ipcMain.handle('check-gta-installed', async () => {
     const gameFiles = findGameFiles(CONFIG.gtaPath);
     return !!(gameFiles['gta_sa.exe'] && gameFiles['samp.exe']);
 });
+
 ipcMain.handle('get-install-path', async () => CONFIG.gtaPath || 'No instalado');
+
 ipcMain.handle('verify-files', async () => {
     if (!CONFIG.gtaPath) return false;
     const markerFile = path.join(CONFIG.gtaPath, '.horizonrp');
@@ -767,13 +927,14 @@ ipcMain.handle('verify-files', async () => {
     const gameFiles = findGameFiles(CONFIG.gtaPath);
     return !!(gameFiles['gta_sa.exe'] && gameFiles['samp.exe'] && gameFiles['samp.dll']);
 });
+
 ipcMain.on('reset-installation', async () => {
     const choice = dialog.showMessageBoxSync(mainWindow, {
         type: 'warning',
         buttons: ['Cancelar', 'Eliminar y reinstalar'],
         defaultId: 0,
-        message: 'Deseas eliminar la instalacin actual?',
-        detail: 'Esto eliminar todos los archivos del juego y tendrs que descargar todo de nuevo.'
+        message: '¿Deseas eliminar la instalación actual?',
+        detail: 'Esto eliminará todos los archivos del juego y tendrás que descargar todo de nuevo.'
     });
     if (choice === 1 && CONFIG.gtaPath && fs.existsSync(CONFIG.gtaPath)) {
         try {
@@ -781,7 +942,7 @@ ipcMain.on('reset-installation', async () => {
             CONFIG.gtaPath = null;
             const configPath = path.join(app.getPath('userData'), 'horizonrp_config.json');
             if (fs.existsSync(configPath)) fs.unlinkSync(configPath);
-            if (mainWindow) mainWindow.webContents.send('installation-reset', 'Instalacin eliminada correctamente');
+            if (mainWindow) mainWindow.webContents.send('installation-reset', 'Instalación eliminada correctamente');
         } catch (error) {
             if (mainWindow) mainWindow.webContents.send('installation-reset', 'Error: ' + error.message);
         }
@@ -808,6 +969,7 @@ async function checkGameInstalled() {
     return !!(gameFiles['gta_sa.exe'] && gameFiles['samp.exe']);
 }
 
+// MODIFICADA: downloadGame con descargas paralelas
 async function downloadGame() {
     const send = (ch, payload) => {
         try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(ch, payload); } catch { }
@@ -822,7 +984,7 @@ async function downloadGame() {
     downloadActive = true;
 
     try {
-        // Marcar instalaciï¿½n
+        // Marcar instalación
         const markerFile = path.join(CONFIG.gtaPath, '.horizonrp');
         fs.writeFileSync(markerFile, JSON.stringify({
             version: '1.0.0',
@@ -838,49 +1000,15 @@ async function downloadGame() {
             throw new Error('No se pudo obtener la lista de archivos');
         }
 
-        const totalFiles = manifest.files.length;
-        let downloadedFiles = 0;
-        let totalSize = manifest.files.reduce((acc, f) => acc + f.size, 0);
+        const totalSize = manifest.files.reduce((acc, f) => acc + (f.size || 0), 0);
 
         send('download-progress', {
             percent: 0,
-            message: `Descargando ${totalFiles} archivos (${formatBytes(totalSize)})...`
+            message: `Preparando descarga de ${manifest.files.length} archivos (${formatBytes(totalSize)})...`
         });
 
-        // Descargar cada archivo
-        for (const fileInfo of manifest.files) {
-            const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
-            const localDir = path.dirname(localPath);
-
-            await fs.ensureDir(localDir);
-
-            // Usar baseDownloadURL en lugar de URL hardcodeada
-            const fileUrl = `${CONFIG.baseDownloadURL}${fileInfo.path}`;
-
-            await downloadFile(fileUrl, localPath, (percent, current, total, speed) => {
-                const overallProgress = Math.round(
-                    (downloadedFiles / totalFiles) * 100 +
-                    (percent / totalFiles)
-                );
-
-                send('download-progress', {
-                    percent: overallProgress,
-                    message: `Descargando archivo ${downloadedFiles + 1}/${totalFiles}...`,
-                    current: current,
-                    total: total,
-                    speed: speed
-                });
-            });
-
-            // Verificar integridad
-            const downloadedHash = await sha256File(localPath);
-            if (downloadedHash.toLowerCase() !== fileInfo.path.toLowerCase()) {
-                console.warn(`Hash mismatch para ${fileInfo.path}, continuando...`);
-                // Puedes decidir si quieres fallar o continuar
-            }
-
-            downloadedFiles++;
-        }
+        // Usar descargas paralelas
+        await downloadFilesParallel(manifest.files, 3);
 
         // Verificar que los archivos principales existan
         const gameFiles = findGameFiles(CONFIG.gtaPath);
@@ -906,9 +1034,9 @@ async function downloadGame() {
 }
 
 async function launchGame() {
-    if (!CONFIG.gtaPath) return { success: false, message: 'El juego no est instalado' };
+    if (!CONFIG.gtaPath) return { success: false, message: 'El juego no está instalado' };
     const markerFile = path.join(CONFIG.gtaPath, '.horizonrp');
-    if (!fs.existsSync(markerFile)) { return { success: false, message: 'Instalacin corrupta. Por favor reinstala.' }; }
+    if (!fs.existsSync(markerFile)) { return { success: false, message: 'Instalación corrupta. Por favor reinstala.' }; }
 
     const gameFiles = findGameFiles(CONFIG.gtaPath);
     if (!gameFiles['samp.exe'] || !gameFiles['gta_sa.exe']) return { success: false, message: 'No se encontraron los archivos del juego' };
@@ -965,7 +1093,7 @@ function formatBytes(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-// ===== INICIALIZACIN =====
+// ===== INICIALIZACIÓN =====
 app.whenReady().then(() => {
     checkingUpdatesWindow = new BrowserWindow({
         width: 450,
