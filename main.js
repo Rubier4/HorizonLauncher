@@ -89,7 +89,7 @@ function positionNicknameWindow() {
 }
 
 
-const GTA_MANIFEST_URL = 'https://horizonrp.es/HZGTA/manifest.json';
+const GTA_MANIFEST_URL = 'https://horizonrp.es/manifest.json';
 
 // Utilidades versin local
 function getLocalGameVersion() {
