@@ -489,7 +489,7 @@ function startMainApp() {
     }
     loadConfig();
     createWindow();
-    initGameAutoUpdate();
+    // initGameAutoUpdate(); // Removed automatic update check on startup
 }
 
 function initLauncherAutoUpdate() {
@@ -921,6 +921,9 @@ ipcMain.handle('check-gta-installed', async () => {
 ipcMain.handle('get-install-path', async () => CONFIG.gtaPath || 'No instalado');
 
 ipcMain.handle('verify-files', async () => {
+    // Trigger game update check when "verify files" is clicked
+    await initGameAutoUpdate();
+    // After update, re-check installation status
     if (!CONFIG.gtaPath) return false;
     const markerFile = path.join(CONFIG.gtaPath, '.horizonrp');
     if (!fs.existsSync(markerFile)) return false;
@@ -1008,7 +1011,7 @@ async function downloadGame() {
         });
 
         // Usar descargas paralelas
-        await downloadFilesParallel(manifest.files, 3);
+        await downloadFilesParallel(manifest.files, 10);
 
         // Verificar que los archivos principales existan
         const gameFiles = findGameFiles(CONFIG.gtaPath);
