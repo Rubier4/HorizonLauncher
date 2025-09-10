@@ -4,7 +4,7 @@ const fs = require('fs-extra');
 const { spawn } = require('child_process');
 const https = require('https');
 const unzipper = require('unzipper');
-const regedit = require('regedit'); // solo para setExternalVBSLocation (no usamos su API)
+const regedit = require('regedit');
 const query = require('samp-query');
 const GameAPI = require('./src/services/api');
 const { autoUpdater } = require('electron-updater');
@@ -15,15 +15,6 @@ const log = require('electron-log');
 autoUpdater.logger = log;
 autoUpdater.logger.transports.file.level = 'info';
 
-// Configurar regedit para usar VBS (necesario si en algn momento usas su API)
-const vbsPath = app.isPackaged
-    ? path.join(process.resourcesPath, 'regedit', 'vbs')
-    : path.join(__dirname, 'node_modules', 'regedit', 'vbs');
-try {
-    regedit.setExternalVBSLocation(vbsPath);
-} catch { }
-
-// Deshabilitar errores de GPU
 app.disableHardwareAcceleration();
 
 // Variables globales
@@ -612,7 +603,7 @@ async function updateNews() {
     if (mainWindow) mainWindow.webContents.send('news-update', news);
 }
 
-// ====== Registry Functions (using regedit package)
+// ====== Registry Functions (using regedit package) ======
 const listReg = util.promisify(regedit.list);
 const putReg = util.promisify(regedit.putValue);
 
