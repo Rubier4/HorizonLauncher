@@ -206,10 +206,15 @@ ipcRenderer.on('download-progress', (_, data) => {
 });
 
 ipcRenderer.on('download-complete', () => {
-    if (progressText) progressText.textContent = '¡Descarga completa! Iniciando juego...';
+    if (progressText) progressText.textContent = '¡Descarga completa!';
     setTimeout(() => {
         if (progressContainer) progressContainer.style.display = 'none';
         if (playBtn) playBtn.style.display = 'flex';
+        const verifyBtn = document.getElementById('verify-files-btn');
+        if (verifyBtn) {
+            verifyBtn.disabled = false;
+            verifyBtn.textContent = 'Verificar Archivos';
+        }
     }, 3000);
     updatePlayButton(true);
 });
@@ -221,6 +226,11 @@ ipcRenderer.on('download-error', (_, error) => {
         if (progressContainer) progressContainer.style.display = 'none';
         if (playBtn) playBtn.style.display = 'flex';
         if (progressFill) progressFill.style.background = '';
+        const verifyBtn = document.getElementById('verify-files-btn');
+        if (verifyBtn) {
+            verifyBtn.disabled = false;
+            verifyBtn.textContent = 'Verificar Archivos';
+        }
     }, 3000);
 });
 
@@ -258,6 +268,49 @@ function openLink(url) {
 ipcRenderer.on('installation-path', (event, installPath) => {
     const pathInput = document.getElementById('install-path');
     if (pathInput) pathInput.value = installPath;
+});
+
+// ---- NUEVO: VERIFICACIÓN DE ARCHIVOS ----
+const verifyBtn = document.getElementById('verify-files-btn');
+if (verifyBtn) {
+    verifyBtn.addEventListener('click', async () => {
+        verifyBtn.disabled = true;
+        verifyBtn.textContent = 'Verificando...';
+
+        // Navegar a la sección "Home" para ver el progreso
+        document.querySelector('.nav-item[data-section="home"]').click();
+
+        // Mostrar UI de progreso
+        if (playBtn) playBtn.style.display = 'none';
+        if (progressContainer) progressContainer.style.display = 'block';
+        if (progressText) progressText.textContent = 'Iniciando verificación de archivos...';
+        if (progressFill) progressFill.style.width = '0%';
+        if (progressPercent) progressPercent.textContent = '0%';
+        if (downloadSpeed) downloadSpeed.textContent = '';
+        if (downloadSize) downloadSize.textContent = '';
+
+        await ipcRenderer.invoke('verify-files');
+    });
+}
+
+ipcRenderer.on('game-update', (event, data) => {
+    const verifyBtn = document.getElementById('verify-files-btn');
+
+    if (data.state === 'uptodate') {
+        if (progressText) progressText.textContent = 'Tus archivos ya están actualizados.';
+        if (progressFill) progressFill.style.width = '100%';
+        if (progressPercent) progressPercent.textContent = '100%';
+        setTimeout(() => {
+            if (progressContainer) progressContainer.style.display = 'none';
+            if (playBtn) playBtn.style.display = 'flex';
+            if (verifyBtn) {
+                verifyBtn.disabled = false;
+                verifyBtn.textContent = 'Verificar Archivos';
+            }
+        }, 3000);
+    } else if (data.state === 'available') {
+        if (progressText) progressText.textContent = `Actualización encontrada. Descargando ${data.filesCount} archivos...`;
+    }
 });
 
 // Obtener versión de la app al cargar
