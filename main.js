@@ -10,6 +10,7 @@ const GameAPI = require('./src/services/api');
 const { autoUpdater } = require('electron-updater');
 const axios = require('axios');
 const crypto = require('crypto');
+const util = require('util');
 const log = require('electron-log');
 autoUpdater.logger = log;
 autoUpdater.logger.transports.file.level = 'info';
@@ -611,97 +612,68 @@ async function updateNews() {
     if (mainWindow) mainWindow.webContents.send('news-update', news);
 }
 
-// ====== REG.EXE helper ====== 
-function runReg(args) {
-    return new Promise((resolve, reject) => {
-        const regExe = process.env.windir
-            ? path.join(process.env.windir, 'System32', 'reg.exe')
-            : 'reg';
+// ====== Registry Functions (using regedit package)
+const listReg = util.promisify(regedit.list);
+const putReg = util.promisify(regedit.putValue);
 
-        const p = spawn(regExe, args, { windowsHide: true });
-        let stdout = '', stderr = '';
-
-        p.stdout?.on('data', d => stdout += d.toString());
-        p.stderr?.on('data', d => stderr += d.toString());
-
-        p.on('close', code => {
-            if (code === 0) resolve({ stdout, stderr, code });
-            else reject(new Error(`reg.exe exit ${code} :: ${stderr || stdout || '(sin salida)'}`));
-        });
-    });
-}
-
-function parseRegQueryValue(stdout, valueName) {
-    // Busca lneas con: valueName   REG_SZ   value
-    const re = new RegExp(`\s${valueName}\s+REG_\w+\s+(.*)`);
-    const lines = stdout.split(/\r?\n/);
-    for (const line of lines) {
-        const m = line.match(re);
-        if (m && m[1]) return m[1].trim();
-    }
-    return '';
-}
-
-// ====== Nickname en registro (HKCU\Software\SAMP) ====== 
 async function getNickname() {
     const key = 'HKCU\Software\SAMP';
-
-    // Intenta PlayerName
     try {
-        const { stdout } = await runReg(['QUERY', key, '/v', 'PlayerName']);
-        const val = parseRegQueryValue(stdout, 'PlayerName');
-        if (val) return val;
-    } catch { }
-
-    // Fallback: player_name
-    try {
-        const { stdout } = await runReg(['QUERY', key, '/v', 'player_name']);
-        const val = parseRegQueryValue(stdout, 'player_name');
-        if (val) return val;
-    } catch { }
-
+        const result = await listReg(key);
+        if (result && result[key] && result[key].values) {
+            const values = result[key].values;
+            if (values.PlayerName) return values.PlayerName.value;
+            if (values.player_name) return values.player_name.value;
+        }
+    } catch (e) {
+        console.warn(`Could not read SAMP registry key at ${key}. It might not exist yet.`, e.message);
+    }
     return '';
 }
 
 async function setNickname(nickname) {
     const key = 'HKCU\Software\SAMP';
-    // Crea clave si no existe
-    try { await runReg(['ADD', key, '/f']); } catch { }
-
-    // Guarda en PlayerName (principal)
-    await runReg(['ADD', key, '/v', 'PlayerName', '/t', 'REG_SZ', '/d', nickname, '/f']).catch(() => { });
-    // Tambin en player_name (compat)
-    await runReg(['ADD', key, '/v', 'player_name', '/t', 'REG_SZ', '/d', nickname, '/f']).catch(() => { });
+    const values = {
+        [key]: {
+            'PlayerName': {
+                value: nickname,
+                type: 'REG_SZ'
+            },
+            'player_name': {
+                value: nickname,
+                type: 'REG_SZ'
+            }
+        }
+    };
+    try {
+        await putReg(values);
+    } catch (e) {
+        console.error('Failed to set nickname in registry:', e);
+        throw e; // Re-throw to be caught by caller
+    }
 }
 
-// ====== Actualizar registro de SAMP (ruta del gta) ====== 
 async function updateSAMPRegistry(gtaExePath) {
     const key = 'HKCU\Software\SAMP';
-
-    try { await runReg(['ADD', key, '/f']); } catch { }
-
-    // Vista por defecto
+    const values = {
+        [key]: {
+            'gta_sa_exe': {
+                value: gtaExePath,
+                type: 'REG_SZ'
+            },
+            'gta_sa_exe_last': {
+                value: gtaExePath,
+                type: 'REG_SZ'
+            }
+        }
+    };
     try {
-        await runReg(['ADD', key, '/v', 'gta_sa_exe', '/t', 'REG_SZ', '/d', gtaExePath, '/f']);
-        await runReg(['ADD', key, '/v', 'gta_sa_exe_last', '/t', 'REG_SZ', '/d', gtaExePath, '/f']);
-        console.log('? Registro SAMP actualizado (vista por defecto):', gtaExePath);
-        return;
-    } catch (e1) {
-        console.warn('Fallo vista por defecto, reintentando /reg:32', e1.message);
+        await putReg(values);
+        console.log('? SAMP registry updated successfully:', gtaExePath);
+    } catch (e) {
+        console.error('Failed to update SAMP registry:', e);
+        throw e; // Re-throw to be caught by caller
     }
-
-    try {
-        await runReg(['ADD', key, '/v', 'gta_sa_exe', '/t', 'REG_SZ', '/d', gtaExePath, '/f', '/reg:32']);
-        await runReg(['ADD', key, '/v', 'gta_sa_exe_last', '/t', 'REG_SZ', '/d', gtaExePath, '/f', '/reg:32']);
-        console.log('? Registro SAMP actualizado (/reg:32):', gtaExePath);
-        return;
-    } catch (e2) {
-        console.warn('Fallo /reg:32, reintentando /reg:64', e2.message);
-    }
-
-    await runReg(['ADD', key, '/v', 'gta_sa_exe', '/t', 'REG_SZ', '/d', gtaExePath, '/f', '/reg:64']);
-    await runReg(['ADD', key, '/v', 'gta_sa_exe_last', '/t', 'REG_SZ', '/d', gtaExePath, '/f', '/reg:64']);
-    console.log('? Registro SAMP actualizado (/reg:64):', gtaExePath);
 }
 
 // ====== Descargar/extraer ====== 
