@@ -618,15 +618,30 @@ function runReg(args) {
             ? path.join(process.env.windir, 'System32', 'reg.exe')
             : 'reg';
 
-        const p = spawn(regExe, args, { windowsHide: true });
+        console.log('Ejecutando reg.exe con args:', args); // Debug
+
+        const p = spawn(regExe, args, {
+            windowsHide: true,
+            shell: false // Importante: no usar shell
+        });
+
         let stdout = '', stderr = '';
 
         p.stdout?.on('data', d => stdout += d.toString());
         p.stderr?.on('data', d => stderr += d.toString());
 
         p.on('close', code => {
-            if (code === 0) resolve({ stdout, stderr, code });
-            else reject(new Error(`reg.exe exit ${code} :: ${stderr || stdout || '(sin salida)'}`));
+            if (code === 0) {
+                resolve({ stdout, stderr, code });
+            } else {
+                console.error('Error reg.exe:', { code, stderr, stdout }); // Debug
+                reject(new Error(`reg.exe exit ${code} :: ${stderr || stdout || '(sin salida)'}`));
+            }
+        });
+
+        p.on('error', err => {
+            console.error('Error spawning reg.exe:', err);
+            reject(err);
         });
     });
 }
@@ -644,7 +659,7 @@ function parseRegQueryValue(stdout, valueName) {
 
 // ====== Nickname en registro (HKCU\Software\SAMP) ====== 
 async function getNickname() {
-    const key = 'HKEY_CURRENT_USER\Software\SAMP';
+    const key = 'HKCU\\Software\\SAMP'; // Doble barra invertida
 
     // Intenta PlayerName
     try {
@@ -664,21 +679,26 @@ async function getNickname() {
 }
 
 async function setNickname(nickname) {
-    const key = 'HKEY_CURRENT_USER\Software\SAMP';
+    const key = 'HKCU\\Software\\SAMP'; // Doble barra invertida
+
     // Crea clave si no existe
-    try { await runReg(['ADD', key, '/f']); } catch { }
+    try {
+        await runReg(['ADD', key, '/f']);
+    } catch { }
 
     // Guarda en PlayerName (principal)
     await runReg(['ADD', key, '/v', 'PlayerName', '/t', 'REG_SZ', '/d', nickname, '/f']).catch(() => { });
-    // Tambin en player_name (compat)
+    // También en player_name (compat)
     await runReg(['ADD', key, '/v', 'player_name', '/t', 'REG_SZ', '/d', nickname, '/f']).catch(() => { });
 }
 
 // ====== Actualizar registro de SAMP (ruta del gta) ====== 
 async function updateSAMPRegistry(gtaExePath) {
-    const key = 'HKEY_CURRENT_USER\Software\SAMP';
+    const key = 'HKCU\\Software\\SAMP'; // Doble barra invertida
 
-    try { await runReg(['ADD', key, '/f']); } catch { }
+    try {
+        await runReg(['ADD', key, '/f']);
+    } catch { }
 
     // Vista por defecto
     try {
@@ -686,14 +706,18 @@ async function updateSAMPRegistry(gtaExePath) {
         await runReg(['ADD', key, '/v', 'gta_sa_exe_last', '/t', 'REG_SZ', '/d', gtaExePath, '/f']);
         console.log('? Registro SAMP actualizado (vista por defecto):', gtaExePath);
         return;
-    } catch (e1) { console.warn('Fallo vista por defecto, reintentando /reg:32', e1.message); }
+    } catch (e1) {
+        console.warn('Fallo vista por defecto, reintentando /reg:32', e1.message);
+    }
 
     try {
         await runReg(['ADD', key, '/v', 'gta_sa_exe', '/t', 'REG_SZ', '/d', gtaExePath, '/f', '/reg:32']);
         await runReg(['ADD', key, '/v', 'gta_sa_exe_last', '/t', 'REG_SZ', '/d', gtaExePath, '/f', '/reg:32']);
         console.log('? Registro SAMP actualizado (/reg:32):', gtaExePath);
         return;
-    } catch (e2) { console.warn('Fallo /reg:32, reintentando /reg:64', e2.message); }
+    } catch (e2) {
+        console.warn('Fallo /reg:32, reintentando /reg:64', e2.message);
+    }
 
     await runReg(['ADD', key, '/v', 'gta_sa_exe', '/t', 'REG_SZ', '/d', gtaExePath, '/f', '/reg:64']);
     await runReg(['ADD', key, '/v', 'gta_sa_exe_last', '/t', 'REG_SZ', '/d', gtaExePath, '/f', '/reg:64']);
