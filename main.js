@@ -334,8 +334,8 @@ async function downloadFilesParallel(files, maxConcurrent = 3) { // Reducido a 3
 async function initGameAutoUpdate() {
     try {
         if (!CONFIG.gtaPath) loadConfig();
-        const baseDir = app.isPackaged ? path.dirname(process.execPath) : path.join(app.getPath('home'), 'Horizon RP Dev');
-        if (!CONFIG.gtaPath) CONFIG.gtaPath = path.join(baseDir, 'GTA Horizon');
+        //const baseDir = app.isPackaged ? path.dirname(process.execPath) : path.join(app.getPath('home'), 'Horizon RP Dev');
+        //if (!CONFIG.gtaPath) CONFIG.gtaPath = path.join(baseDir, 'GTA Horizon');
 
         const { data: manifest } = await axios.get(GTA_MANIFEST_URL, { timeout: 8000 });
         if (!manifest || !manifest.files || !Array.isArray(manifest.files)) {
@@ -427,7 +427,7 @@ function loadConfig() {
             const saved = JSON.parse(fs.readFileSync(configPath, 'utf8'));
             if (saved.gtaPath && fs.existsSync(path.join(saved.gtaPath, '.horizonrp'))) {
                 CONFIG.gtaPath = saved.gtaPath;
-                console.log('? Instalacin cargada:', CONFIG.gtaPath);
+                console.log('? Instalación cargada:', CONFIG.gtaPath);
                 return;
             }
         }
@@ -435,9 +435,9 @@ function loadConfig() {
         console.error('? Error cargando config:', e);
     }
 
-    const baseDir = app.isPackaged ? path.dirname(process.execPath) : path.join(app.getPath('home'), 'Horizon RP Dev');
-    CONFIG.gtaPath = path.join(baseDir, 'GTA Horizon');
-    console.log('? Ruta de GTA calculada automticamente:', CONFIG.gtaPath);
+    // CAMBIO: Siempre usar Documents
+    CONFIG.gtaPath = path.join(app.getPath('documents'), 'GTA Horizon');
+    console.log('? Ruta de GTA en Documents:', CONFIG.gtaPath);
     saveConfig();
 }
 
@@ -923,7 +923,8 @@ ipcMain.on('save-nickname-and-play', async (event, nickname) => {
 // Obtener ruta instalacin (para settings)
 ipcMain.on('get-installation-path', () => {
     if (mainWindow) {
-        mainWindow.webContents.send('installation-path', CONFIG.gtaPath || 'No instalado');
+        const displayPath = CONFIG.gtaPath || 'No instalado';
+        mainWindow.webContents.send('installation-path', displayPath);
     }
 });
 
@@ -951,8 +952,8 @@ ipcMain.handle('verify-files', async () => {
         // Enviar mensaje inicial
         send('download-progress', { percent: 0, message: 'Iniciando verificación de archivos...' });
 
-        const baseDir = app.isPackaged ? path.dirname(process.execPath) : path.join(app.getPath('home'), 'Horizon RP Dev');
-        if (!CONFIG.gtaPath) CONFIG.gtaPath = path.join(baseDir, 'GTA Horizon');
+        //const baseDir = app.isPackaged ? path.dirname(process.execPath) : path.join(app.getPath('home'), 'Horizon RP Dev');
+        //if (!CONFIG.gtaPath) CONFIG.gtaPath = path.join(baseDir, 'GTA Horizon');
 
         const { data: manifest } = await axios.get(GTA_MANIFEST_URL, { timeout: 8000 });
         if (!manifest || !manifest.files || !Array.isArray(manifest.files)) {
