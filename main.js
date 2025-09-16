@@ -941,14 +941,101 @@ ipcMain.handle('check-gta-installed', async () => {
 ipcMain.handle('get-install-path', async () => CONFIG.gtaPath || 'No instalado');
 
 ipcMain.handle('verify-files', async () => {
-    // Trigger game update check when "verify files" is clicked
-    await initGameAutoUpdate();
-    // After update, re-check installation status
-    if (!CONFIG.gtaPath) return false;
-    const markerFile = path.join(CONFIG.gtaPath, '.horizonrp');
-    if (!fs.existsSync(markerFile)) return false;
-    const gameFiles = findGameFiles(CONFIG.gtaPath);
-    return !!(gameFiles['gta_sa.exe'] && gameFiles['samp.exe'] && gameFiles['samp.dll']);
+    const send = (ch, payload) => {
+        try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(ch, payload); } catch { }
+    };
+
+    try {
+        if (!CONFIG.gtaPath) loadConfig();
+
+        // Enviar mensaje inicial
+        send('download-progress', { percent: 0, message: 'Iniciando verificación de archivos...' });
+
+        const baseDir = app.isPackaged ? path.dirname(process.execPath) : path.join(app.getPath('home'), 'Horizon RP Dev');
+        if (!CONFIG.gtaPath) CONFIG.gtaPath = path.join(baseDir, 'GTA Horizon');
+
+        const { data: manifest } = await axios.get(GTA_MANIFEST_URL, { timeout: 8000 });
+        if (!manifest || !manifest.files || !Array.isArray(manifest.files)) {
+            send('download-error', 'No se pudo obtener el manifest de verificación');
+            return false;
+        }
+
+        if (!fs.existsSync(CONFIG.gtaPath)) {
+            send('download-error', 'GTA no está instalado');
+            return false;
+        }
+
+        // Verificar archivos con progreso visible
+        const filesToUpdate = [];
+        let totalUpdateSize = 0;
+        let checkedFiles = 0;
+
+        send('download-progress', { percent: 5, message: `Verificando ${manifest.files.length} archivos...` });
+
+        for (const fileInfo of manifest.files) {
+            checkedFiles++;
+
+            // Actualizar progreso cada 50 archivos
+            if (checkedFiles % 50 === 0) {
+                const verifyProgress = Math.round((checkedFiles / manifest.files.length) * 40) + 5;
+                send('download-progress', {
+                    percent: verifyProgress,
+                    message: `Verificando archivos... ${checkedFiles}/${manifest.files.length}`
+                });
+            }
+
+            const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
+
+            if (!fs.existsSync(localPath)) {
+                filesToUpdate.push(fileInfo);
+                totalUpdateSize += fileInfo.size || 0;
+                continue;
+            }
+
+            const stats = fs.statSync(localPath);
+            if (stats.size !== fileInfo.size) {
+                filesToUpdate.push(fileInfo);
+                totalUpdateSize += fileInfo.size || 0;
+                continue;
+            }
+
+            // Para archivos pequeños, verificar hash
+            if (stats.size < 1024 * 1024) {
+                const localHash = await sha256File(localPath);
+                if (!localHash || localHash.toLowerCase() !== fileInfo.hash.toLowerCase()) {
+                    filesToUpdate.push(fileInfo);
+                    totalUpdateSize += fileInfo.size || 0;
+                }
+            }
+        }
+
+        if (filesToUpdate.length > 0) {
+            send('download-progress', {
+                percent: 45,
+                message: `Se encontraron ${filesToUpdate.length} archivos para actualizar (${formatBytes(totalUpdateSize)})`
+            });
+
+            // Descargar archivos faltantes/corruptos
+            await downloadFilesParallel(filesToUpdate, 3);
+
+            send('download-progress', { percent: 100, message: 'Verificación completa' });
+            send('download-complete');
+        } else {
+            send('download-progress', { percent: 100, message: 'Todos los archivos están actualizados' });
+            send('download-complete');
+        }
+
+        // Re-verificar estado de instalación
+        const markerFile = path.join(CONFIG.gtaPath, '.horizonrp');
+        if (!fs.existsSync(markerFile)) return false;
+        const gameFiles = findGameFiles(CONFIG.gtaPath);
+        return !!(gameFiles['gta_sa.exe'] && gameFiles['samp.exe'] && gameFiles['samp.dll']);
+
+    } catch (error) {
+        console.error('Error durante verificación:', error);
+        send('download-error', `Error verificando archivos: ${error.message}`);
+        return false;
+    }
 });
 
 ipcMain.on('reset-installation', async () => {
