@@ -144,7 +144,7 @@ function sha256File(filePath) {
 }
 
 // NUEVA FUNCIN: Descarga paralela con control de concurrencia
-async function downloadFilesParallel(files, maxConcurrent = 3) { // Reducido a 3 simultneos
+async function downloadFilesParallel(files, maxConcurrent = 3) {
     const send = (ch, payload) => {
         try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(ch, payload); } catch { }
     };
@@ -152,13 +152,10 @@ async function downloadFilesParallel(files, maxConcurrent = 3) { // Reducido a 3
     let completedFiles = 0;
     let failedFiles = [];
     const totalFiles = files.length;
-    let totalBytes = 0;
+    let totalBytes = files.reduce((acc, f) => acc + (f.size || 0), 0);
     let downloadedBytes = 0;
 
-    // Calcular tamao total
-    files.forEach(f => totalBytes += f.size || 0);
-
-    // Funcin para descargar con reintentos
+    // Función para descargar con reintentos
     const downloadWithRetry = async (fileInfo, retries = 3) => {
         for (let attempt = 1; attempt <= retries; attempt++) {
             try {
@@ -171,98 +168,48 @@ async function downloadFilesParallel(files, maxConcurrent = 3) { // Reducido a 3
                     failedFiles.push(fileInfo);
                     return false;
                 }
-                // Esperar un poco antes de reintentar
                 await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
             }
         }
     };
 
-    // Funcin para descargar un archivo individual
-    const downloadSingleFile = (fileInfo) => {
-        return new Promise((resolve, reject) => {
-            const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
-            const localDir = path.dirname(localPath);
+    // Función para descargar un archivo individual con verificación
+    const downloadSingleFile = async (fileInfo) => {
+        const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
+        const localDir = path.dirname(localPath);
+        fs.ensureDirSync(localDir);
 
-            // Crear directorio
-            fs.ensureDirSync(localDir);
-
-            // Si el archivo ya existe con el hash correcto, saltar
-            if (fs.existsSync(localPath)) {
-                sha256File(localPath).then(hash => {
-                    if (hash && hash.toLowerCase() === fileInfo.hash.toLowerCase()) {
-                        console.log(`Archivo ${fileInfo.path} ya existe y es vlido, saltando...`);
-                        completedFiles++;
-                        resolve();
-                        return;
-                    }
-                });
+        // Si ya existe y es válido, saltar
+        if (fs.existsSync(localPath)) {
+            const existingHash = await sha256File(localPath);
+            if (existingHash && existingHash.toLowerCase() === fileInfo.hash.toLowerCase()) {
+                console.log(`Archivo ${fileInfo.path} ya existe y es válido, saltando...`);
+                completedFiles++;
+                return;
             }
+        }
 
+        // Descargar archivo
+        return new Promise((resolve, reject) => {
             const fileUrl = `${CONFIG.baseDownloadURL}${fileInfo.path}`;
             const file = fs.createWriteStream(localPath);
-            let fileDownloadedBytes = 0;
             let timeout;
 
-            // Timeout de 30 segundos por archivo
-            timeout = setTimeout(() => {
-                file.close();
-                try { fs.unlinkSync(localPath); } catch { } // Limpiar archivo parcial
-                reject(new Error(`Timeout descargando ${fileInfo.path}`));
-            }, 30000);
-
-            const request = https.get(fileUrl, (response) => {
-                if (response.statusCode === 301 || response.statusCode === 302) {
-                    file.close();
-                    try { fs.unlinkSync(localPath); } catch { } // Limpiar archivo parcial
-                    clearTimeout(timeout);
-
-                    // Seguir redireccin
-                    https.get(response.headers.location, (redirectResponse) => {
-                        handleResponse(redirectResponse);
-                    }).on('error', handleError);
-                    return;
-                }
-
-                if (response.statusCode !== 200) {
-                    file.close();
-                    try { fs.unlinkSync(localPath); } catch { } // Limpiar archivo parcial
-                    clearTimeout(timeout);
-                    reject(new Error(`HTTP ${response.statusCode} para ${fileInfo.path}`));
-                    return;
-                }
-
-                handleResponse(response);
-            });
-
-            request.on('error', handleError);
-            request.on('timeout', () => {
-                request.destroy();
-                handleError(new Error('Request timeout'));
-            });
-
-            function handleError(err) {
+            const handleError = (err) => {
                 clearTimeout(timeout);
                 file.close();
-                try { fs.unlinkSync(localPath); } catch { } // Limpiar archivo parcial
+                try { fs.unlinkSync(localPath); } catch { }
                 reject(err);
-            }
+            };
 
-            function handleResponse(res) {
+            const handleResponse = (res) => {
                 res.on('data', (chunk) => {
                     clearTimeout(timeout);
-                    timeout = setTimeout(() => {
-                        file.close();
-                        try { fs.unlinkSync(localPath); } catch { } // Limpiar archivo parcial
-                        reject(new Error(`Timeout durante descarga de ${fileInfo.path}`));
-                    }, 30000);
+                    timeout = setTimeout(() => handleError(new Error(`Timeout durante ${fileInfo.path}`)), 30000);
 
-                    fileDownloadedBytes += chunk.length;
                     downloadedBytes += chunk.length;
-
-                    const globalProgress = Math.round((completedFiles / totalFiles) * 100);
-
                     send('download-progress', {
-                        percent: globalProgress,
+                        percent: Math.round((completedFiles / totalFiles) * 100),
                         message: `Descargando archivo ${completedFiles + 1}/${totalFiles}: ${path.basename(fileInfo.path)}`,
                         current: downloadedBytes,
                         total: totalBytes
@@ -274,51 +221,57 @@ async function downloadFilesParallel(files, maxConcurrent = 3) { // Reducido a 3
                 file.on('finish', async () => {
                     clearTimeout(timeout);
                     file.close();
-
-                    // Verificar hash
                     try {
                         const downloadedHash = await sha256File(localPath);
                         if (!downloadedHash || downloadedHash.toLowerCase() !== fileInfo.hash.toLowerCase()) {
-                            console.warn(`Hash incorrecto para ${fileInfo.path}`);
-                            console.warn(`Hash esperado: ${fileInfo.hash.toLowerCase()}`);
-                            console.warn(`Hash descargado: ${downloadedHash.toLowerCase()}`);
-                            try { fs.unlinkSync(localPath); } catch { } // Limpiar archivo incorrecto
-                            reject(new Error(`Hash incorrecto para ${fileInfo.path}`));
-                            return;
+                            try { fs.unlinkSync(localPath); } catch { }
+                            return reject(new Error(`Hash incorrecto para ${fileInfo.path}`));
                         }
+                        completedFiles++;
+                        console.log(`? Completado ${completedFiles}/${totalFiles}: ${fileInfo.path}`);
+                        resolve();
                     } catch (e) {
                         reject(e);
-                        return;
                     }
-
-                    completedFiles++;
-                    console.log(`? Completado ${completedFiles}/${totalFiles}: ${fileInfo.path}`);
-                    resolve();
                 });
 
-                file.on('error', (err) => {
-                    clearTimeout(timeout);
-                    file.close();
-                    try { fs.unlinkSync(localPath); } catch { } // Limpiar archivo parcial
-                    reject(err);
-                });
-            }
+                file.on('error', handleError);
+            };
+
+            const request = https.get(fileUrl, (response) => {
+                if ([301, 302].includes(response.statusCode)) {
+                    const redirectUrl = response.headers.location;
+                    if (redirectUrl) {
+                        https.get(redirectUrl, handleResponse).on('error', handleError);
+                    } else {
+                        handleError(new Error(`Redirección inválida para ${fileInfo.path}`));
+                    }
+                    return;
+                }
+                if (response.statusCode !== 200) {
+                    return handleError(new Error(`HTTP ${response.statusCode} para ${fileInfo.path}`));
+                }
+                handleResponse(response);
+            });
+
+            request.on('error', handleError);
+            request.on('timeout', () => {
+                request.destroy();
+                handleError(new Error('Request timeout'));
+            });
+
+            timeout = setTimeout(() => handleError(new Error(`Timeout para ${fileInfo.path}`)), 30000);
         });
     };
 
-    // Procesar archivos en lotes con reintentos
-    console.log(`Iniciando descarga de ${files.length} archivos con ${maxConcurrent} simultneos...`);
+    // Procesar archivos en lotes
+    console.log(`Iniciando descarga de ${files.length} archivos con ${maxConcurrent} simultáneos...`);
 
     for (let i = 0; i < files.length; i += maxConcurrent) {
-        const batch = files.slice(i, Math.min(i + maxConcurrent, files.length));
-
+        const batch = files.slice(i, i + maxConcurrent);
         console.log(`Procesando lote ${Math.floor(i / maxConcurrent) + 1}/${Math.ceil(files.length / maxConcurrent)}`);
+        await Promise.all(batch.map(f => downloadWithRetry(f, 3)));
 
-        await Promise.all(
-            batch.map(file => downloadWithRetry(file, 3))
-        );
-
-        // Pequea pausa entre lotes para no saturar
         if (i + maxConcurrent < files.length) {
             await new Promise(resolve => setTimeout(resolve, 500));
         }
@@ -331,6 +284,7 @@ async function downloadFilesParallel(files, maxConcurrent = 3) { // Reducido a 3
 
     console.log(`? Descarga completa: ${completedFiles} archivos`);
 }
+
 
 // Auto-update del juego mejorado
 async function initGameAutoUpdate() {
@@ -509,7 +463,7 @@ function initLauncherAutoUpdate() {
     autoUpdater.on('update-available', () => {
         log.info('Update available, starting download...');
         if (checkingUpdatesWindow) {
-            checkingUpdatesWindow.webContents.send('update-message', 'Descargando actualizacin...');
+            checkingUpdatesWindow.webContents.send('update-message', 'Descargando actualización...');
         }
     });
 
