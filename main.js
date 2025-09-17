@@ -155,10 +155,25 @@ async function downloadFilesParallel(files, maxConcurrent = 3) {
     let totalBytes = files.reduce((acc, f) => acc + (f.size || 0), 0);
     let downloadedBytes = 0;
 
-    // Función para descargar con reintentos
+    // Verificar si necesitamos descargar el archivo
+    const needsDownload = async (fileInfo) => {
+        const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
+        if (!fs.existsSync(localPath)) return true;
+        const currentHash = await sha256File(localPath);
+        return !currentHash || currentHash.toLowerCase() !== fileInfo.hash.toLowerCase();
+    };
+
+    // Descargar con reintentos
     const downloadWithRetry = async (fileInfo, retries = 3) => {
         for (let attempt = 1; attempt <= retries; attempt++) {
             try {
+                const shouldDownload = await needsDownload(fileInfo);
+                if (!shouldDownload) {
+                    console.log(`Archivo ${fileInfo.path} ya existe y es válido, saltando...`);
+                    completedFiles++;
+                    return true;
+                }
+
                 console.log(`Descargando ${fileInfo.path} (intento ${attempt}/${retries})`);
                 await downloadSingleFile(fileInfo);
                 return true;
@@ -173,24 +188,13 @@ async function downloadFilesParallel(files, maxConcurrent = 3) {
         }
     };
 
-    // Función para descargar un archivo individual con verificación
-    const downloadSingleFile = async (fileInfo) => {
-        const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
-        const localDir = path.dirname(localPath);
-        fs.ensureDirSync(localDir);
-
-        // Si ya existe y es válido, saltar
-        if (fs.existsSync(localPath)) {
-            const existingHash = await sha256File(localPath);
-            if (existingHash && existingHash.toLowerCase() === fileInfo.hash.toLowerCase()) {
-                console.log(`Archivo ${fileInfo.path} ya existe y es válido, saltando...`);
-                completedFiles++;
-                return;
-            }
-        }
-
-        // Descargar archivo
+    // Descargar un archivo individual sin verificación posterior
+    const downloadSingleFile = (fileInfo) => {
         return new Promise((resolve, reject) => {
+            const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
+            const localDir = path.dirname(localPath);
+            fs.ensureDirSync(localDir);
+
             const fileUrl = `${CONFIG.baseDownloadURL}${fileInfo.path}`;
             const file = fs.createWriteStream(localPath);
             let timeout;
@@ -218,21 +222,12 @@ async function downloadFilesParallel(files, maxConcurrent = 3) {
 
                 res.pipe(file);
 
-                file.on('finish', async () => {
+                file.on('finish', () => {
                     clearTimeout(timeout);
                     file.close();
-                    try {
-                        const downloadedHash = await sha256File(localPath);
-                        if (!downloadedHash || downloadedHash.toLowerCase() !== fileInfo.hash.toLowerCase()) {
-                            try { fs.unlinkSync(localPath); } catch { }
-                            return reject(new Error(`Hash incorrecto para ${fileInfo.path}`));
-                        }
-                        completedFiles++;
-                        console.log(`? Completado ${completedFiles}/${totalFiles}: ${fileInfo.path}`);
-                        resolve();
-                    } catch (e) {
-                        reject(e);
-                    }
+                    completedFiles++;
+                    console.log(`? Completado ${completedFiles}/${totalFiles}: ${fileInfo.path}`);
+                    resolve();
                 });
 
                 file.on('error', handleError);
@@ -264,7 +259,7 @@ async function downloadFilesParallel(files, maxConcurrent = 3) {
         });
     };
 
-    // Procesar archivos en lotes
+    // Procesar archivos por lotes
     console.log(`Iniciando descarga de ${files.length} archivos con ${maxConcurrent} simultáneos...`);
 
     for (let i = 0; i < files.length; i += maxConcurrent) {
@@ -284,6 +279,7 @@ async function downloadFilesParallel(files, maxConcurrent = 3) {
 
     console.log(`? Descarga completa: ${completedFiles} archivos`);
 }
+
 
 
 // Auto-update del juego mejorado
