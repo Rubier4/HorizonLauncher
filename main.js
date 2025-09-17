@@ -280,6 +280,8 @@ async function downloadFilesParallel(files, maxConcurrent = 3) { // Reducido a 3
                         const downloadedHash = await sha256File(localPath);
                         if (!downloadedHash || downloadedHash.toLowerCase() !== fileInfo.hash.toLowerCase()) {
                             console.warn(`Hash incorrecto para ${fileInfo.path}`);
+                            console.warn(`Hash esperado: ${fileInfo.hash.toLowerCase()}`);
+                            console.warn(`Hash descargado: ${downloadedHash.toLowerCase()}`);
                             try { fs.unlinkSync(localPath); } catch { } // Limpiar archivo incorrecto
                             reject(new Error(`Hash incorrecto para ${fileInfo.path}`));
                             return;
