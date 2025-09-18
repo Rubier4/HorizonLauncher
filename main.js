@@ -343,7 +343,7 @@ async function initGameAutoUpdate() {
         }
 
         if (filesToUpdate.length > 0) {
-            console.log(`Actualizacin disponible: ${filesToUpdate.length} archivos (${formatBytes(totalUpdateSize)})`);
+            console.log(`Actualización disponible: ${filesToUpdate.length} archivos (${formatBytes(totalUpdateSize)})`);
             if (mainWindow) {
                 mainWindow.webContents.send('game-update', {
                     state: 'available',
@@ -358,7 +358,7 @@ async function initGameAutoUpdate() {
             if (mainWindow) {
                 mainWindow.webContents.send('download-progress', {
                     percent: 100,
-                    message: 'Actualizacin completa'
+                    message: 'Actualización completa'
                 });
                 mainWindow.webContents.send('download-complete');
             }
@@ -367,7 +367,7 @@ async function initGameAutoUpdate() {
             if (mainWindow) mainWindow.webContents.send('game-update', { state: 'uptodate' });
         }
     } catch (e) {
-        console.warn('Error verificando actualizacin:', e.message);
+        console.warn('Error verificando actualización:', e.message);
     }
 }
 
@@ -784,7 +784,7 @@ ipcMain.on('close-window', () => {
             buttons: ['Cancelar descarga y salir', 'Continuar descargando'],
             defaultId: 1,
             message: 'Hay una descarga en progreso',
-            detail: 'Si sales ahora, tendrs que descargar todo de nuevo.'
+            detail: 'Si sales ahora, tendrás que descargar todo de nuevo.'
         });
         if (choice === 1) return;
     }
@@ -996,8 +996,8 @@ ipcMain.on('reset-installation', async () => {
         type: 'warning',
         buttons: ['Cancelar', 'Eliminar y reinstalar'],
         defaultId: 0,
-        message: 'Deseas eliminar la instalacin actual?',
-        detail: 'Esto eliminar todos los archivos del juego y tendrs que descargar todo de nuevo.'
+        message: '¿Deseas eliminar la instalacin actual?',
+        detail: 'Esto eliminará todos los archivos del juego y tendrás que descargar todo de nuevo.'
     });
     if (choice === 1 && CONFIG.gtaPath && fs.existsSync(CONFIG.gtaPath)) {
         try {
@@ -1085,12 +1085,12 @@ async function verifyGameFiles() {
             setLocalGameVersion(manifest.version);
         }
 
-        send('download-progress', { percent: 100, message: 'VerificaciÃ³n completada.' });
+        send('download-progress', { percent: 100, message: 'Verificación completada.' });
         return { success: true };
 
     } catch (e) {
         console.error('Error durante la verificaciÃ³n de archivos:', e);
-        send('download-error', `Error de verificaciÃ³n: ${e.message}`);
+        send('download-error', `Error de verificación: ${e.message}`);
         return { success: false, message: e.message };
     }
 }
@@ -1177,9 +1177,9 @@ async function downloadGame() {
 }
 
 async function launchGame() {
-    if (!CONFIG.gtaPath) return { success: false, message: 'El juego no est instalado' };
+    if (!CONFIG.gtaPath) return { success: false, message: 'El juego no está instalado' };
     const markerFile = path.join(CONFIG.gtaPath, '.horizonrp');
-    if (!fs.existsSync(markerFile)) { return { success: false, message: 'Instalacin corrupta. Por favor reinstala.' }; }
+    if (!fs.existsSync(markerFile)) { return { success: false, message: 'Instalación corrupta. Por favor reinstala.' }; }
 
     const gameFiles = findGameFiles(CONFIG.gtaPath);
     if (!gameFiles['samp.exe'] || !gameFiles['gta_sa.exe']) return { success: false, message: 'No se encontraron los archivos del juego' };
