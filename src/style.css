@@ -8,9 +8,12 @@
     --primary: #ffffff;
     --primary-dark: #f0f0f0;
     --accent: #e0e0e0;
-    --bg-dark: #0c1a0a;
-    --bg-darker: #061011;
-    --bg-card: rgba(15, 20, 33, 0.9);
+    --bg-dark: #1e1e1e;
+    /* Tu color base */
+    --bg-darker: #141414;
+    /* Versión más oscura */
+    --bg-card: rgba(30, 30, 30, 0.9);
+    /* Cards con el mismo tono */
     --bg-hover: rgba(255, 255, 255, 0.1);
     --text-primary: #ffffff;
     --text-secondary: #ffffff;
@@ -57,7 +60,8 @@ body {
 /* Barra de título */
 .titlebar {
     height: 32px;
-    background: rgba(6, 9, 17, 0.95);
+    background: rgba(30, 30, 30, 0.95);
+    /* #1e1e1e en rgba */
     backdrop-filter: blur(10px);
     display: flex;
     justify-content: space-between;
@@ -123,7 +127,8 @@ body {
 /* Sidebar */
 .sidebar {
     width: 280px;
-    background: rgba(6, 9, 17, 0.95);
+    background: rgba(30, 30, 30, 0.95);
+    /* Mismo gris */
     backdrop-filter: blur(20px);
     border-right: 1px solid var(--border);
     display: flex;
@@ -257,6 +262,7 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
+    justify-content: center;
     margin-bottom: 5px;
 }
 
