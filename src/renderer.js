@@ -3,6 +3,7 @@ const { ipcRenderer } = require('electron');
 // Variables globales
 let currentServerInfo = null;
 let currentStats = null;
+let currentNickname = '';
 
 // Controles de ventana
 document.getElementById('minimize-btn').addEventListener('click', () => {
@@ -31,6 +32,149 @@ document.querySelectorAll('.nav-item').forEach(item => {
         }
     });
 });
+
+// Sistema de Nickname
+const nicknameInput = document.getElementById('nickname-input');
+const saveNicknameBtn = document.getElementById('save-nickname-btn');
+
+// Validar formato de nickname
+function validateNickname(nickname) {
+    if (!nickname || nickname.length < 3 || nickname.length > 24) {
+        return false;
+    }
+    // Formato: Nombre_Apellido (solo letras y un underscore)
+    const regex = /^[A-Za-z]+_[A-Za-z]+$/;
+    return regex.test(nickname);
+}
+
+// Cargar nickname guardado
+async function loadNickname() {
+    ipcRenderer.send('get-nickname');
+}
+
+// Recibir nickname actual
+ipcRenderer.on('nickname-current', (event, nickname) => {
+    currentNickname = nickname || '';
+    if (nicknameInput) {
+        nicknameInput.value = currentNickname;
+        updateNicknameUI();
+    }
+});
+
+// Actualizar UI del nickname
+function updateNicknameUI() {
+    const isValid = validateNickname(nicknameInput.value);
+
+    if (saveNicknameBtn) {
+        saveNicknameBtn.disabled = !isValid || nicknameInput.value === currentNickname;
+    }
+
+    if (isValid) {
+        nicknameInput.style.borderColor = '';
+    } else if (nicknameInput.value) {
+        nicknameInput.style.borderColor = 'var(--danger)';
+    }
+}
+
+// Event listeners para nickname
+if (nicknameInput) {
+    nicknameInput.addEventListener('input', updateNicknameUI);
+
+    nicknameInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !saveNicknameBtn.disabled) {
+            saveNicknameBtn.click();
+        }
+    });
+}
+
+if (saveNicknameBtn) {
+    saveNicknameBtn.addEventListener('click', async () => {
+        const nickname = nicknameInput.value.trim();
+
+        if (!validateNickname(nickname)) {
+            showNotification('Formato inválido. Usa: Nombre_Apellido', 'error');
+            return;
+        }
+
+        saveNicknameBtn.disabled = true;
+
+        try {
+            await ipcRenderer.invoke('save-nickname', nickname);
+            currentNickname = nickname;
+
+            // Animación de guardado exitoso
+            nicknameInput.classList.add('nickname-saved');
+            setTimeout(() => {
+                nicknameInput.classList.remove('nickname-saved');
+            }, 500);
+
+            showNotification('Nickname guardado correctamente', 'success');
+            updateNicknameUI();
+        } catch (error) {
+            console.error('Error guardando nickname:', error);
+            showNotification('Error al guardar el nickname', 'error');
+            saveNicknameBtn.disabled = false;
+        }
+    });
+}
+
+// Sistema de notificaciones simple
+function showNotification(message, type = 'info') {
+    // Crear notificación temporal
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.textContent = message;
+    notification.style.cssText = `
+        position: fixed;
+        top: 50px;
+        right: 20px;
+        padding: 12px 20px;
+        background: ${type === 'error' ? 'var(--danger)' : type === 'success' ? 'var(--success)' : 'var(--primary)'};
+        color: ${type === 'error' || type === 'success' ? 'white' : 'var(--bg-dark)'};
+        border-radius: 8px;
+        z-index: 10000;
+        animation: slideIn 0.3s ease;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        font-size: 14px;
+        font-weight: 500;
+    `;
+
+    document.body.appendChild(notification);
+
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => {
+            document.body.removeChild(notification);
+        }, 300);
+    }, 3000);
+}
+
+// Añadir estilos de animación para notificaciones
+const notificationStyles = document.createElement('style');
+notificationStyles.textContent = `
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
+    @keyframes slideOut {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+`;
+document.head.appendChild(notificationStyles);
 
 // Recibir actualización de información del servidor
 ipcRenderer.on('server-info-update', (event, serverInfo) => {
@@ -165,12 +309,47 @@ const progressPercent = document.getElementById('progress-percent');
 const downloadSpeed = document.getElementById('download-speed');
 const downloadSize = document.getElementById('download-size');
 
-playBtn.addEventListener('click', () => {
+playBtn.addEventListener('click', async () => {
+    // Verificar servidor online
     if (currentServerInfo && !currentServerInfo.online) {
-        alert('El servidor está actualmente offline. Por favor, intenta más tarde.');
+        showNotification('El servidor está actualmente offline. Por favor, intenta más tarde.', 'error');
         return;
     }
-    ipcRenderer.send('open-nickname-window');
+
+    // Verificar nickname
+    const nickname = nicknameInput.value.trim();
+    if (!validateNickname(nickname)) {
+        showNotification('Por favor, ingresa un nickname válido (Nombre_Apellido)', 'error');
+        nicknameInput.focus();
+        nicknameInput.style.borderColor = 'var(--danger)';
+
+        // Hacer scroll al sidebar si es necesario
+        const nicknameSection = document.querySelector('.nickname-section');
+        if (nicknameSection) {
+            nicknameSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return;
+    }
+
+    // Guardar nickname si cambió
+    if (nickname !== currentNickname) {
+        try {
+            await ipcRenderer.invoke('save-nickname', nickname);
+            currentNickname = nickname;
+        } catch (error) {
+            console.error('Error guardando nickname:', error);
+            showNotification('Error al guardar el nickname', 'error');
+            return;
+        }
+    }
+
+    // Iniciar el juego
+    ipcRenderer.send('start-game-with-nickname', nickname);
+});
+
+// Recibir eventos del proceso de inicio del juego
+ipcRenderer.on('game-starting', () => {
+    showNotification('Iniciando el juego...', 'info');
 });
 
 function updatePlayButton(isInstalled) {
@@ -217,6 +396,7 @@ ipcRenderer.on('download-complete', () => {
         }
     }, 3000);
     updatePlayButton(true);
+    showNotification('Descarga completada exitosamente', 'success');
 });
 
 ipcRenderer.on('download-error', (_, error) => {
@@ -232,9 +412,12 @@ ipcRenderer.on('download-error', (_, error) => {
             verifyBtn.textContent = 'Verificar Archivos';
         }
     }, 3000);
+    showNotification('Error en la descarga: ' + error, 'error');
 });
 
-ipcRenderer.on('game-error', (event, error) => alert('Error al iniciar el juego: ' + error));
+ipcRenderer.on('game-error', (event, error) => {
+    showNotification('Error al iniciar el juego: ' + error, 'error');
+});
 
 // Reinstalar juego
 document.getElementById('reset-install-btn').addEventListener('click', () => {
@@ -244,19 +427,15 @@ document.getElementById('reset-install-btn').addEventListener('click', () => {
 });
 
 ipcRenderer.on('installation-reset', (event, message) => {
-    alert(message);
+    showNotification(message, 'info');
     updatePlayButton(false);
 });
 
 // Copiar IP
 function copyIP() {
-    const serverIP = `${currentServerInfo ? currentServerInfo.host : 'samp.horizonrp.es'}:7777`;
+    const serverIP = `${CONFIG.serverIP}:${CONFIG.serverPort}`;
     navigator.clipboard.writeText(serverIP);
-
-    const copyBtn = document.querySelector('.copy-btn');
-    const originalText = copyBtn.textContent;
-    copyBtn.textContent = '✓';
-    setTimeout(() => copyBtn.textContent = originalText, 1000);
+    showNotification('IP copiada al portapapeles', 'success');
 }
 
 // Abrir enlaces externos
@@ -270,7 +449,7 @@ ipcRenderer.on('installation-path', (event, installPath) => {
     if (pathInput) pathInput.value = installPath;
 });
 
-// ---- NUEVO: VERIFICACIÓN DE ARCHIVOS ----
+// Verificación de archivos
 const verifyBtn = document.getElementById('verify-files-btn');
 if (verifyBtn) {
     verifyBtn.addEventListener('click', async () => {
@@ -300,6 +479,7 @@ ipcRenderer.on('game-update', (event, data) => {
         if (progressText) progressText.textContent = 'Tus archivos ya están actualizados.';
         if (progressFill) progressFill.style.width = '100%';
         if (progressPercent) progressPercent.textContent = '100%';
+        showNotification('Archivos verificados correctamente', 'success');
         setTimeout(() => {
             if (progressContainer) progressContainer.style.display = 'none';
             if (playBtn) playBtn.style.display = 'flex';
@@ -318,10 +498,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     try {
         const version = await ipcRenderer.invoke('app-version');
         const versionNode = document.getElementById('app-version');
-        if (versionNode) versionNode.textContent = version; // quedará como "Launcher v1.0.22"
+        if (versionNode) versionNode.textContent = version;
     } catch (e) {
         console.warn('No se pudo obtener versión:', e);
     }
+
+    // Cargar nickname guardado
+    loadNickname();
 
     ipcRenderer.send('get-installation-path');
     ipcRenderer.send('request-server-info');
@@ -331,7 +514,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         updatePlayButton(isInstalled);
     } catch (e) {
         console.warn('Could not check if GTA is installed:', e);
-        updatePlayButton(false); // Assume not installed on error
+        updatePlayButton(false);
     }
 });
 
@@ -345,3 +528,28 @@ if (browseBtn) {
         }
     });
 }
+
+// Auto-guardar nickname cuando se pierde el foco
+if (nicknameInput) {
+    nicknameInput.addEventListener('blur', async () => {
+        const nickname = nicknameInput.value.trim();
+        if (validateNickname(nickname) && nickname !== currentNickname) {
+            try {
+                await ipcRenderer.invoke('save-nickname', nickname);
+                currentNickname = nickname;
+                nicknameInput.classList.add('nickname-saved');
+                setTimeout(() => {
+                    nicknameInput.classList.remove('nickname-saved');
+                }, 500);
+            } catch (error) {
+                console.error('Error auto-guardando nickname:', error);
+            }
+        }
+    });
+}
+
+// Configuración global del servidor (para copiar IP)
+const CONFIG = {
+    serverIP: '195.26.252.73',
+    serverPort: 7778
+};
