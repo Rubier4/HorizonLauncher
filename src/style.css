@@ -129,14 +129,15 @@ body {
     display: flex;
     flex-direction: column;
     padding: 20px;
-    gap: 20px;
+    gap: 15px;
+    /* Cambiado de 20px a 15px */
 }
 
 .server-header {
     display: flex;
     align-items: center;
     gap: 15px;
-    padding: 15px;
+    padding: 12px;
     background: var(--bg-card);
     border-radius: 12px;
     border: 1px solid var(--border);
@@ -162,10 +163,13 @@ body {
 }
 
 .app-version {
-    margin-top: 8px;
-    padding-top: 6px;
+    margin-top: 5px;
+    /* Reducido de 8px */
+    padding-top: 5px;
+    /* Reducido de 6px */
     text-align: center;
-    font-size: 11px;
+    font-size: 10px;
+    /* Reducido de 11px */
     color: var(--text-dim);
     opacity: 0.85;
     border-top: 1px dashed var(--border);
@@ -176,7 +180,7 @@ body {
 .server-status {
     background: var(--bg-card);
     border-radius: 12px;
-    padding: 15px;
+    padding: 12px;
     border: 1px solid var(--border);
 }
 
@@ -240,11 +244,13 @@ body {
 .nickname-section {
     background: var(--bg-card);
     border-radius: 12px;
-    padding: 15px;
+    padding: 12px;
+    /* Reducido de 15px */
     border: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
+    /* Reducido de 10px */
 }
 
 .nickname-header {
@@ -273,6 +279,8 @@ body {
     display: flex;
     gap: 8px;
     align-items: center;
+    justify-content: center;
+    /* Añadir esta línea */
 }
 
 .nickname-input {
