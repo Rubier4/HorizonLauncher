@@ -35,7 +35,6 @@ document.querySelectorAll('.nav-item').forEach(item => {
 
 // Sistema de Nickname
 const nicknameInput = document.getElementById('nickname-input');
-const saveNicknameBtn = document.getElementById('save-nickname-btn');
 
 // Validar formato de nickname
 function validateNickname(nickname) {
@@ -65,10 +64,6 @@ ipcRenderer.on('nickname-current', (event, nickname) => {
 function updateNicknameUI() {
     const isValid = validateNickname(nicknameInput.value);
 
-    if (saveNicknameBtn) {
-        saveNicknameBtn.disabled = !isValid || nicknameInput.value === currentNickname;
-    }
-
     if (isValid) {
         nicknameInput.style.borderColor = '';
     } else if (nicknameInput.value) {
@@ -87,36 +82,6 @@ if (nicknameInput) {
     });
 }
 
-if (saveNicknameBtn) {
-    saveNicknameBtn.addEventListener('click', async () => {
-        const nickname = nicknameInput.value.trim();
-
-        if (!validateNickname(nickname)) {
-            showNotification('Formato inválido. Usa: Nombre_Apellido', 'error');
-            return;
-        }
-
-        saveNicknameBtn.disabled = true;
-
-        try {
-            await ipcRenderer.invoke('save-nickname', nickname);
-            currentNickname = nickname;
-
-            // Animación de guardado exitoso
-            nicknameInput.classList.add('nickname-saved');
-            setTimeout(() => {
-                nicknameInput.classList.remove('nickname-saved');
-            }, 500);
-
-            showNotification('Nickname guardado correctamente', 'success');
-            updateNicknameUI();
-        } catch (error) {
-            console.error('Error guardando nickname:', error);
-            showNotification('Error al guardar el nickname', 'error');
-            saveNicknameBtn.disabled = false;
-        }
-    });
-}
 
 // Sistema de notificaciones simple
 function showNotification(message, type = 'info') {
