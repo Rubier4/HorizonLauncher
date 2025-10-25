@@ -135,6 +135,7 @@ body {
     flex-direction: column;
     padding: 20px;
     gap: 15px;
+    opacity: 0.55;
     /* Cambiado de 20px a 15px */
 }
 
