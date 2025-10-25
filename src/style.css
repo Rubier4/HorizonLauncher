@@ -12,14 +12,14 @@
     /* Tu color base */
     --bg-darker: #141414;
     /* Versión más oscura */
-    --bg-card: rgba(30, 30, 30, 0.9);
-    /* Cards con el mismo tono */
+    --bg-card: rgba(30, 30, 30, 0.75);
+    /* Cards con menor opacidad para ver más el fondo */
     --bg-hover: rgba(255, 255, 255, 0.1);
     --text-primary: #ffffff;
     --text-secondary: #ffffff;
     --text-dim: #7a8091;
-    --border: rgba(255, 255, 255, 0.1);
-    --border-light: rgba(255, 255, 255, 0.2);
+    --border: rgba(255, 255, 255, 0.15);
+    --border-light: rgba(255, 255, 255, 0.25);
     --success: #00ff88;
     --danger: #ff4444;
     --warning: #ffaa00;
@@ -60,8 +60,8 @@ body {
 /* Barra de título */
 .titlebar {
     height: 32px;
-    background: rgba(30, 30, 30, 0.95);
-    /* #1e1e1e en rgba */
+    background: rgba(30, 30, 30, 0.85);
+    /* Ajustado para mejor visibilidad */
     backdrop-filter: blur(10px);
     display: flex;
     justify-content: space-between;
@@ -127,16 +127,14 @@ body {
 /* Sidebar */
 .sidebar {
     width: 280px;
-    background: rgba(30, 30, 30, 0.95);
-    /* Mismo gris */
+    background: rgba(30, 30, 30, 0.75);
+    /* Transparencia ajustada para ver el fondo pero mantener legibilidad */
     backdrop-filter: blur(20px);
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
     padding: 20px;
     gap: 15px;
-    opacity: 0.55;
-    /* Cambiado de 20px a 15px */
 }
 
 .server-header {
@@ -144,9 +142,10 @@ body {
     align-items: center;
     gap: 15px;
     padding: 12px;
-    background: var(--bg-card);
+    background: rgba(20, 20, 20, 0.6);
     border-radius: 12px;
     border: 1px solid var(--border);
+    backdrop-filter: blur(10px);
 }
 
 .server-logo {
@@ -184,10 +183,11 @@ body {
 
 /* Estado del servidor */
 .server-status {
-    background: var(--bg-card);
+    background: rgba(20, 20, 20, 0.6);
     border-radius: 12px;
     padding: 12px;
     border: 1px solid var(--border);
+    backdrop-filter: blur(10px);
 }
 
 .status-header {
@@ -248,7 +248,7 @@ body {
 
 /* Sección de Nickname */
 .nickname-section {
-    background: var(--bg-card);
+    background: rgba(20, 20, 20, 0.6);
     border-radius: 12px;
     padding: 12px;
     /* Reducido de 15px */
@@ -257,6 +257,7 @@ body {
     flex-direction: column;
     gap: 8px;
     /* Reducido de 10px */
+    backdrop-filter: blur(10px);
 }
 
 .nickname-header {
@@ -392,7 +393,7 @@ body {
 .social-btn {
     width: 40px;
     height: 40px;
-    background: var(--bg-card);
+    background: rgba(20, 20, 20, 0.6);
     border: 1px solid var(--border);
     border-radius: 8px;
     color: var(--text-secondary);
@@ -401,6 +402,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    backdrop-filter: blur(10px);
 }
 
 .social-btn:hover {
@@ -422,7 +424,7 @@ body {
     flex: 1;
     overflow: hidden;
     padding: 30px;
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(0, 0, 0, 0.2);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -634,7 +636,7 @@ body {
 /* Progress bar */
 .download-progress {
     width: 500px;
-    background: rgba(15, 20, 33, 0.95);
+    background: rgba(15, 20, 33, 0.85);
     backdrop-filter: blur(20px);
     border-radius: 15px;
     padding: 25px;
@@ -704,8 +706,8 @@ body {
 }
 
 .info-card {
-    background: var(--bg-card);
-    backdrop-filter: blur(10px);
+    background: rgba(20, 20, 20, 0.65);
+    backdrop-filter: blur(15px);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 25px;
@@ -718,6 +720,7 @@ body {
     transform: translateY(-5px);
     border-color: var(--primary);
     box-shadow: 0 10px 30px rgba(255, 255, 255, 0.1);
+    background: rgba(20, 20, 20, 0.75);
 }
 
 .card-icon {
@@ -801,8 +804,8 @@ body {
 }
 
 .news-card {
-    background: var(--bg-card);
-    backdrop-filter: blur(10px);
+    background: rgba(20, 20, 20, 0.65);
+    backdrop-filter: blur(15px);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 20px;
@@ -812,6 +815,7 @@ body {
 .news-card:hover {
     border-color: var(--primary);
     transform: translateX(5px);
+    background: rgba(20, 20, 20, 0.75);
 }
 
 .news-card.featured {
@@ -873,8 +877,8 @@ body {
 }
 
 .stat-card {
-    background: var(--bg-card);
-    backdrop-filter: blur(10px);
+    background: rgba(20, 20, 20, 0.65);
+    backdrop-filter: blur(15px);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 25px 40px;
@@ -887,6 +891,7 @@ body {
 .stat-card:hover {
     transform: translateY(-5px);
     border-color: var(--primary);
+    background: rgba(20, 20, 20, 0.75);
 }
 
 .stat-value {
@@ -915,8 +920,8 @@ body {
 }
 
 .setting-group {
-    background: var(--bg-card);
-    backdrop-filter: blur(10px);
+    background: rgba(20, 20, 20, 0.65);
+    backdrop-filter: blur(15px);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 20px;
@@ -1018,8 +1023,8 @@ body {
     display: flex;
     align-items: center;
     gap: 15px;
-    background: var(--bg-card);
-    backdrop-filter: blur(10px);
+    background: rgba(20, 20, 20, 0.65);
+    backdrop-filter: blur(15px);
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 15px;
@@ -1029,6 +1034,7 @@ body {
 .player-card:hover {
     transform: translateX(5px);
     border-color: var(--primary);
+    background: rgba(20, 20, 20, 0.75);
 }
 
 .player-rank {
