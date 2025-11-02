@@ -586,25 +586,31 @@ body {
 
 .switch .slider .ball {
     background-color: #fff;
-    height: 36px;
-    width: 36px;
+    height: 100%;
+    /* Cambiado de 36px a 100% */
+    width: 2.6em;
+    /* Mismo valor que la altura del switch */
     border-radius: 50%;
     position: absolute;
     left: -1px;
-    top: 50%;
-    transform: translateY(-50%);
+    top: 0;
+    /* Cambiado de 50% a 0 */
+    transform: translateY(0);
+    /* Cambiado de translateY(-50%) a translateY(0) */
     transition: 0.4s;
 }
 
 .switch:hover .slider .ball {
     left: 72%;
-    transform: translateY(-50%) rotate(360deg);
+    transform: translateY(0) rotate(360deg);
+    /* Cambiado translateY(-50%) a translateY(0) */
     outline: 6px solid rgba(255, 255, 255, 0.278);
 }
 
 .switch:active .slider .ball {
     left: -1px;
-    transform: translateY(-50%) rotate(0deg);
+    transform: translateY(0) rotate(0deg);
+    /* Cambiado translateY(-50%) a translateY(0) */
     outline: none;
 }
 
