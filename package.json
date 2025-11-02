@@ -1,6 +1,6 @@
 {
   "name": "horizonrp-launcher",
-  "version": "1.0.58",
+  "version": "1.0.59",
   "description": "Launcher oficial de Horizon Roleplay",
   "main": "main.js",
   "scripts": {
