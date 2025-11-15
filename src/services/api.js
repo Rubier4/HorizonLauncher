@@ -169,9 +169,7 @@ class GameAPI {
 
     getMockNews() {
         return [
-            { id: 1, title: '¡Gran Actualización 2.0!', content: 'Nueva isla...', author: 'Admin', date: '15/11/2024', image_url: null },
-            { id: 2, title: 'Sistema de Empresas', content: 'Ahora puedes...', author: 'Admin', date: '10/11/2024', image_url: null },
-            { id: 3, title: 'Evento Halloween', content: 'Premios especiales...', author: 'Admin', date: '05/11/2024', image_url: null }
+            { id: 1, title: '¡Gran Apertura!', content: '¡Bienvenido a Horizon Roleplay, disfruta de tu estancia!', author: 'Admin', date: '16/11/2025', image_url: null }
         ];
     }
 

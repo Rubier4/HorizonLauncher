@@ -8,7 +8,7 @@
     },
     "server": {
         "ip": "samp.horizonrp.es",
-        "port": 7778,
+        "port": 7777,
         "name": "Horizon Roleplay",
         "maxPlayers": 500
     },
