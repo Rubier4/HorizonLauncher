@@ -36,7 +36,7 @@ const gameAPI = new GameAPI();
 const CONFIG = {
     serverName: 'Horizon Roleplay',
     serverIP: '195.26.252.73',
-    serverPort: 7777,
+    serverPort: 7778,
     website: 'https://horizonrp.es',
     discord: 'https://discord.gg/horizonrp',
     forum: 'https://foro.horizonrp.es',
@@ -465,7 +465,7 @@ async function initializeAPI() {
 
 // Server/News
 async function updateServerInfo() {
-    const serverOptions = { host: '195.26.252.73', port: 7777, timeout: 5000 };
+    const serverOptions = { host: '195.26.252.73', port: 7778, timeout: 5000 };
     const startTime = Date.now();
 
     query(serverOptions, (error, response) => {
