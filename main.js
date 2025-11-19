@@ -1006,7 +1006,7 @@ async function downloadGame() {
     await fs.ensureDir(CONFIG.gtaPath);
     downloadActive = true;
 
-    const zipUrl = 'https://horizonrp.es/downloads/HZGTA.zip';
+    const zipUrl = 'https://pub-9d7e62ca68da4c1fb5a98f2a71cdf404.r2.dev/HZGTA.zip';
     const tempZipPath = path.join(app.getPath('temp'), 'HZGTA.zip');
 
     try {
@@ -1015,7 +1015,7 @@ async function downloadGame() {
         await downloadFile(zipUrl, tempZipPath, (percent, current, total, speed) => {
             send('download-progress', {
                 percent: Math.round(percent * 0.8),
-                message: 'Descargando HZGTA.zip...',
+                message: 'Descargando GTA Horizon...',
                 current: current,
                 total: total,
                 speed: speed
