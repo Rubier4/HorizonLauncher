@@ -1085,7 +1085,7 @@ async function launchGame() {
         await updateSAMPRegistry(gameFiles['gta_sa.exe']);
 
         const gameCwd = path.dirname(gameFiles['samp.exe']);
-        const gameProcess = spawn(gameFiles['samp.exe'], [`${CONFIG.serverIP}:${CONFIG.serverPort}`], {
+        const gameProcess = spawn(gameFiles['samp.exe'], [`${CONFIG.serverIP}:${CONFIG.serverPort}`, '-horizon-launcher'], {
             cwd: gameCwd,
             detached: true,
             stdio: 'ignore'
