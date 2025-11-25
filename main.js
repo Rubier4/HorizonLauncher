@@ -1083,13 +1083,17 @@ async function launchGame() {
 
     try {
         await updateSAMPRegistry(gameFiles['gta_sa.exe']);
-
+        const launcherFlag = path.join(CONFIG.gtaPath, '.launcher_active');
+        fs.writeFileSync(launcherFlag, Date.now().toString());
         const gameCwd = path.dirname(gameFiles['samp.exe']);
-        const gameProcess = spawn(gameFiles['samp.exe'], [`${CONFIG.serverIP}:${CONFIG.serverPort}`, '-horizon-launcher'], {
+        const gameProcess = spawn(gameFiles['samp.exe'], [`${CONFIG.serverIP}:${CONFIG.serverPort}`], {
             cwd: gameCwd,
             detached: true,
             stdio: 'ignore'
         });
+        setTimeout(() => {
+            try { fs.unlinkSync(launcherFlag); } catch { }
+        }, 10000);
 
         gameProcess.unref();
         setTimeout(() => mainWindow?.minimize(), 2000);

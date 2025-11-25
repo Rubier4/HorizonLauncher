@@ -4,7 +4,7 @@ const axios = require('axios');
 class GameAPI {
     constructor() {
         // URL de tu API backend
-        this.apiUrl = 'api.horizonrp.es'; // Cambia esto a tu dominio real
+        this.apiUrl = 'https://api.horizonrp.es/'; // Cambia esto a tu dominio real
         // Para desarrollo local usa: http://localhost:3001
 
         this.axiosInstance = axios.create({
