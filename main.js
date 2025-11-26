@@ -41,7 +41,7 @@ const CONFIG = {
     discord: 'https://discord.gg/horizonrp',
     forum: 'https://foro.horizonrp.es',
     wiki: 'https://wiki.horizonrp.es',
-    baseDownloadURL: 'https://horizonrp.es/HZGTA/',
+    baseDownloadURL: 'https://pub-9d7e62ca68da4c1fb5a98f2a71cdf404.r2.dev/HZGTA/',
     gtaPath: null
 };
 
@@ -103,7 +103,11 @@ function sha256File(filePath) {
 // Descarga paralela con control de concurrencia
 async function downloadFilesParallel(files, maxConcurrent = 3) {
     const send = (ch, payload) => {
-        try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(ch, payload); } catch { }
+        try {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send(ch, payload);
+            }
+        } catch { }
     };
 
     let completedFiles = 0;
@@ -112,30 +116,62 @@ async function downloadFilesParallel(files, maxConcurrent = 3) {
     let totalBytes = files.reduce((acc, f) => acc + (f.size || 0), 0);
     let downloadedBytes = 0;
 
+    // Función para verificar si necesita descarga (SIEMPRE verifica hash)
     const needsDownload = async (fileInfo) => {
         const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
-        if (!fs.existsSync(localPath)) return true;
+
+        if (!fs.existsSync(localPath)) {
+            return { needs: true, reason: 'no existe' };
+        }
+
+        const stats = fs.statSync(localPath);
+        if (stats.size !== fileInfo.size) {
+            return { needs: true, reason: 'tamaño diferente' };
+        }
+
         const currentHash = await sha256File(localPath);
-        return !currentHash || currentHash.toLowerCase() !== fileInfo.hash.toLowerCase();
+        if (!currentHash || currentHash.toLowerCase() !== fileInfo.hash.toLowerCase()) {
+            return { needs: true, reason: 'hash diferente' };
+        }
+
+        return { needs: false, reason: 'ok' };
     };
 
+    // Función para descargar un archivo con reintentos
     const downloadWithRetry = async (fileInfo, retries = 3) => {
         for (let attempt = 1; attempt <= retries; attempt++) {
             try {
-                const shouldDownload = await needsDownload(fileInfo);
-                if (!shouldDownload) {
-                    console.log(`Archivo ${fileInfo.path} ya existe y es válido, saltando...`);
+                const check = await needsDownload(fileInfo);
+                if (!check.needs) {
+                    console.log(`✓ Archivo OK, saltando: ${fileInfo.path}`);
                     completedFiles++;
+                    downloadedBytes += fileInfo.size || 0;
+                    send('download-progress', {
+                        percent: Math.round((completedFiles / totalFiles) * 100),
+                        message: `Verificado ${completedFiles}/${totalFiles}: ${path.basename(fileInfo.path)}`,
+                        current: downloadedBytes,
+                        total: totalBytes
+                    });
                     return true;
                 }
 
-                console.log(`Descargando ${fileInfo.path} (intento ${attempt}/${retries})`);
+                console.log(`Descargando ${fileInfo.path} (${check.reason}) - intento ${attempt}/${retries}`);
                 await downloadSingleFile(fileInfo);
+
+                // Verificar después de descargar
+                const verifyCheck = await needsDownload(fileInfo);
+                if (verifyCheck.needs) {
+                    throw new Error(`Verificación falló después de descargar: ${verifyCheck.reason}`);
+                }
+
+                completedFiles++;
+                console.log(`✓ Descargado ${completedFiles}/${totalFiles}: ${fileInfo.path}`);
                 return true;
+
             } catch (error) {
-                console.error(`Error en ${fileInfo.path}, intento ${attempt}:`, error.message);
+                console.error(`✗ Error en ${fileInfo.path}, intento ${attempt}:`, error.message);
                 if (attempt === retries) {
-                    failedFiles.push(fileInfo);
+                    failedFiles.push({ path: fileInfo.path, error: error.message });
                     return false;
                 }
                 await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
@@ -143,32 +179,50 @@ async function downloadFilesParallel(files, maxConcurrent = 3) {
         }
     };
 
+    // Función para descargar un solo archivo
     const downloadSingleFile = (fileInfo) => {
         return new Promise((resolve, reject) => {
             const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
             const localDir = path.dirname(localPath);
             fs.ensureDirSync(localDir);
 
-            const fileUrl = `${CONFIG.baseDownloadURL}${fileInfo.path}`;
+            // Codificar URL correctamente para caracteres especiales
+            const encodedPath = fileInfo.path.split('/').map(part => encodeURIComponent(part)).join('/');
+            const fileUrl = `${CONFIG.baseDownloadURL}${encodedPath}`;
+
             const file = fs.createWriteStream(localPath);
             let timeout;
+            let fileBytes = 0;
 
-            const handleError = (err) => {
+            const cleanup = () => {
                 clearTimeout(timeout);
                 file.close();
+            };
+
+            const handleError = (err) => {
+                cleanup();
                 try { fs.unlinkSync(localPath); } catch { }
                 reject(err);
             };
 
-            const handleResponse = (res) => {
-                res.on('data', (chunk) => {
-                    clearTimeout(timeout);
-                    timeout = setTimeout(() => handleError(new Error(`Timeout durante ${fileInfo.path}`)), 30000);
+            const resetTimeout = () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => handleError(new Error('Timeout de descarga')), 60000);
+            };
 
+            const handleResponse = (res) => {
+                if (res.statusCode !== 200) {
+                    return handleError(new Error(`HTTP ${res.statusCode}`));
+                }
+
+                res.on('data', (chunk) => {
+                    resetTimeout();
+                    fileBytes += chunk.length;
                     downloadedBytes += chunk.length;
+
                     send('download-progress', {
                         percent: Math.round((completedFiles / totalFiles) * 100),
-                        message: `Descargando archivo ${completedFiles + 1}/${totalFiles}: ${path.basename(fileInfo.path)}`,
+                        message: `Descargando ${completedFiles + 1}/${totalFiles}: ${path.basename(fileInfo.path)}`,
                         current: downloadedBytes,
                         total: totalBytes
                     });
@@ -177,60 +231,67 @@ async function downloadFilesParallel(files, maxConcurrent = 3) {
                 res.pipe(file);
 
                 file.on('finish', () => {
-                    clearTimeout(timeout);
-                    file.close();
-                    completedFiles++;
-                    console.log(`✓ Completado ${completedFiles}/${totalFiles}: ${fileInfo.path}`);
+                    cleanup();
                     resolve();
                 });
 
                 file.on('error', handleError);
+                res.on('error', handleError);
             };
 
-            const request = https.get(fileUrl, (response) => {
-                if ([301, 302].includes(response.statusCode)) {
-                    const redirectUrl = response.headers.location;
-                    if (redirectUrl) {
-                        https.get(redirectUrl, handleResponse).on('error', handleError);
-                    } else {
-                        handleError(new Error(`Redirección inválida para ${fileInfo.path}`));
+            const makeRequest = (url) => {
+                resetTimeout();
+
+                const request = https.get(url, (response) => {
+                    // Manejar redirecciones
+                    if ([301, 302, 303, 307, 308].includes(response.statusCode)) {
+                        const redirectUrl = response.headers.location;
+                        if (redirectUrl) {
+                            console.log(`Redirigiendo a: ${redirectUrl}`);
+                            makeRequest(redirectUrl);
+                        } else {
+                            handleError(new Error('Redirección sin URL'));
+                        }
+                        return;
                     }
-                    return;
-                }
-                if (response.statusCode !== 200) {
-                    return handleError(new Error(`HTTP ${response.statusCode} para ${fileInfo.path}`));
-                }
-                handleResponse(response);
-            });
+                    handleResponse(response);
+                });
 
-            request.on('error', handleError);
-            request.on('timeout', () => {
-                request.destroy();
-                handleError(new Error('Request timeout'));
-            });
+                request.on('error', handleError);
+                request.on('timeout', () => {
+                    request.destroy();
+                    handleError(new Error('Timeout de conexión'));
+                });
+            };
 
-            timeout = setTimeout(() => handleError(new Error(`Timeout para ${fileInfo.path}`)), 30000);
+            makeRequest(fileUrl);
         });
     };
 
-    console.log(`Iniciando descarga de ${files.length} archivos con ${maxConcurrent} simultáneos...`);
+    console.log(`=== Iniciando descarga de ${files.length} archivos ===`);
 
+    // Procesar en lotes
     for (let i = 0; i < files.length; i += maxConcurrent) {
         const batch = files.slice(i, i + maxConcurrent);
-        console.log(`Procesando lote ${Math.floor(i / maxConcurrent) + 1}/${Math.ceil(files.length / maxConcurrent)}`);
+        const batchNum = Math.floor(i / maxConcurrent) + 1;
+        const totalBatches = Math.ceil(files.length / maxConcurrent);
+
+        console.log(`Procesando lote ${batchNum}/${totalBatches}`);
         await Promise.all(batch.map(f => downloadWithRetry(f, 3)));
 
+        // Pequeña pausa entre lotes
         if (i + maxConcurrent < files.length) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 300));
         }
     }
 
     if (failedFiles.length > 0) {
-        console.error(`Archivos que fallaron (${failedFiles.length}):`, failedFiles.map(f => f.path));
+        console.error(`=== ${failedFiles.length} archivos fallaron ===`);
+        failedFiles.forEach(f => console.error(`  - ${f.path}: ${f.error}`));
         throw new Error(`No se pudieron descargar ${failedFiles.length} archivos`);
     }
 
-    console.log(`✓ Descarga completa: ${completedFiles} archivos`);
+    console.log(`=== Descarga completa: ${completedFiles} archivos ===`);
 }
 
 // Auto-update del juego mejorado
@@ -238,7 +299,7 @@ async function initGameAutoUpdate() {
     try {
         if (!CONFIG.gtaPath) loadConfig();
 
-        const { data: manifest } = await axios.get(GTA_MANIFEST_URL, { timeout: 8000 });
+        const { data: manifest } = await axios.get(GTA_MANIFEST_URL, { timeout: 15000 });
         if (!manifest || !manifest.files || !Array.isArray(manifest.files)) {
             console.warn('Manifest inválido', manifest);
             return;
@@ -260,35 +321,46 @@ async function initGameAutoUpdate() {
 
             if (checkedFiles % 50 === 0) {
                 console.log(`Verificados ${checkedFiles}/${manifest.files.length} archivos...`);
+                // Enviar progreso de verificación
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.webContents.send('download-progress', {
+                        percent: Math.round((checkedFiles / manifest.files.length) * 100),
+                        message: `Verificando archivos... ${checkedFiles}/${manifest.files.length}`
+                    });
+                }
             }
 
             const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
 
+            // Si no existe el archivo, necesita descarga
             if (!fs.existsSync(localPath)) {
+                console.log(`Falta: ${fileInfo.path}`);
                 filesToUpdate.push(fileInfo);
                 totalUpdateSize += fileInfo.size || 0;
                 continue;
             }
 
+            // Verificar tamaño primero (es más rápido)
             const stats = fs.statSync(localPath);
             if (stats.size !== fileInfo.size) {
+                console.log(`Tamaño diferente: ${fileInfo.path} (local: ${stats.size}, servidor: ${fileInfo.size})`);
                 filesToUpdate.push(fileInfo);
                 totalUpdateSize += fileInfo.size || 0;
                 continue;
             }
 
-            if (stats.size < 1024 * 1024) {
-                const localHash = await sha256File(localPath);
-                if (!localHash || localHash.toLowerCase() !== fileInfo.hash.toLowerCase()) {
-                    filesToUpdate.push(fileInfo);
-                    totalUpdateSize += fileInfo.size || 0;
-                }
+            // SIEMPRE verificar hash
+            const localHash = await sha256File(localPath);
+            if (!localHash || localHash.toLowerCase() !== fileInfo.hash.toLowerCase()) {
+                console.log(`Hash diferente: ${fileInfo.path}`);
+                filesToUpdate.push(fileInfo);
+                totalUpdateSize += fileInfo.size || 0;
             }
         }
 
         if (filesToUpdate.length > 0) {
             console.log(`Actualización disponible: ${filesToUpdate.length} archivos (${formatBytes(totalUpdateSize)})`);
-            if (mainWindow) {
+            if (mainWindow && !mainWindow.isDestroyed()) {
                 mainWindow.webContents.send('game-update', {
                     state: 'available',
                     filesCount: filesToUpdate.length,
@@ -298,7 +370,7 @@ async function initGameAutoUpdate() {
 
             await downloadFilesParallel(filesToUpdate, 3);
 
-            if (mainWindow) {
+            if (mainWindow && !mainWindow.isDestroyed()) {
                 mainWindow.webContents.send('download-progress', {
                     percent: 100,
                     message: 'Actualización completa'
@@ -307,7 +379,9 @@ async function initGameAutoUpdate() {
             }
         } else {
             console.log('GTA está actualizado');
-            if (mainWindow) mainWindow.webContents.send('game-update', { state: 'uptodate' });
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('game-update', { state: 'uptodate' });
+            }
         }
     } catch (e) {
         console.warn('Error verificando actualización:', e.message);
@@ -801,15 +875,19 @@ ipcMain.handle('get-install-path', async () => CONFIG.gtaPath || 'No instalado')
 
 ipcMain.handle('verify-files', async () => {
     const send = (ch, payload) => {
-        try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(ch, payload); } catch { }
+        try {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send(ch, payload);
+            }
+        } catch { }
     };
 
     try {
         if (!CONFIG.gtaPath) loadConfig();
 
-        send('download-progress', { percent: 0, message: 'Iniciando verificación de archivos...' });
+        send('download-progress', { percent: 0, message: 'Iniciando verificación completa...' });
 
-        const { data: manifest } = await axios.get(GTA_MANIFEST_URL, { timeout: 8000 });
+        const { data: manifest } = await axios.get(GTA_MANIFEST_URL, { timeout: 15000 });
         if (!manifest || !manifest.files || !Array.isArray(manifest.files)) {
             send('download-error', 'No se pudo obtener el manifest de verificación');
             return false;
@@ -823,67 +901,77 @@ ipcMain.handle('verify-files', async () => {
         const filesToUpdate = [];
         let totalUpdateSize = 0;
         let checkedFiles = 0;
+        const totalFiles = manifest.files.length;
 
-        send('download-progress', { percent: 5, message: `Verificando ${manifest.files.length} archivos...` });
+        console.log(`=== Verificación completa de ${totalFiles} archivos ===`);
 
         for (const fileInfo of manifest.files) {
             checkedFiles++;
 
-            if (checkedFiles % 50 === 0) {
-                const verifyProgress = Math.round((checkedFiles / manifest.files.length) * 40) + 5;
+            // Actualizar progreso
+            if (checkedFiles % 25 === 0 || checkedFiles === totalFiles) {
+                const verifyProgress = Math.round((checkedFiles / totalFiles) * 50);
                 send('download-progress', {
                     percent: verifyProgress,
-                    message: `Verificando archivos... ${checkedFiles}/${manifest.files.length}`
+                    message: `Verificando ${checkedFiles}/${totalFiles} archivos...`
                 });
             }
 
             const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
 
+            // Verificar existencia
             if (!fs.existsSync(localPath)) {
+                console.log(`[FALTA] ${fileInfo.path}`);
                 filesToUpdate.push(fileInfo);
                 totalUpdateSize += fileInfo.size || 0;
                 continue;
             }
 
+            // Verificar tamaño
             const stats = fs.statSync(localPath);
             if (stats.size !== fileInfo.size) {
+                console.log(`[TAMAÑO] ${fileInfo.path} - Local: ${stats.size}, Esperado: ${fileInfo.size}`);
                 filesToUpdate.push(fileInfo);
                 totalUpdateSize += fileInfo.size || 0;
                 continue;
             }
 
-            if (stats.size < 1024 * 1024) {
-                const localHash = await sha256File(localPath);
-                if (!localHash || localHash.toLowerCase() !== fileInfo.hash.toLowerCase()) {
-                    filesToUpdate.push(fileInfo);
-                    totalUpdateSize += fileInfo.size || 0;
-                }
+            // SIEMPRE verificar hash
+            const localHash = await sha256File(localPath);
+            if (!localHash || localHash.toLowerCase() !== fileInfo.hash.toLowerCase()) {
+                console.log(`[HASH] ${fileInfo.path}`);
+                filesToUpdate.push(fileInfo);
+                totalUpdateSize += fileInfo.size || 0;
             }
         }
 
+        console.log(`=== Verificación completada: ${filesToUpdate.length} archivos necesitan actualización ===`);
+
         if (filesToUpdate.length > 0) {
             send('download-progress', {
-                percent: 45,
-                message: `Se encontraron ${filesToUpdate.length} archivos para actualizar (${formatBytes(totalUpdateSize)})`
+                percent: 50,
+                message: `Descargando ${filesToUpdate.length} archivos (${formatBytes(totalUpdateSize)})...`
             });
 
             await downloadFilesParallel(filesToUpdate, 3);
 
-            send('download-progress', { percent: 100, message: 'Verificación completa' });
+            send('download-progress', { percent: 100, message: 'Verificación y reparación completa' });
             send('download-complete');
         } else {
-            send('download-progress', { percent: 100, message: 'Todos los archivos están actualizados' });
+            send('download-progress', { percent: 100, message: 'Todos los archivos están correctos' });
             send('download-complete');
         }
 
+        // Verificar archivos críticos
         const markerFile = path.join(CONFIG.gtaPath, '.horizonrp');
         if (!fs.existsSync(markerFile)) return false;
+
         const gameFiles = findGameFiles(CONFIG.gtaPath);
         return !!(gameFiles['gta_sa.exe'] && gameFiles['samp.exe'] && gameFiles['samp.dll']);
 
     } catch (error) {
         console.error('Error durante verificación:', error);
-        send('download-error', `Error verificando archivos: ${error.message}`);
+        send('download-error', `Error: ${error.message}`);
         return false;
     }
 });
@@ -929,55 +1017,86 @@ async function checkGameInstalled() {
     return !!(gameFiles['gta_sa.exe'] && gameFiles['samp.exe']);
 }
 
-// Verificación de archivos post-extracción
+// Verificación de archivos post-extracción (VERIFICA HASH SIEMPRE)
 async function verifyGameFiles() {
     const send = (ch, payload) => {
-        try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(ch, payload); } catch { }
+        try {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send(ch, payload);
+            }
+        } catch { }
     };
 
     try {
-        if (!CONFIG.gtaPath) return { success: false, message: 'No hay ruta de GTA configurada.' };
+        if (!CONFIG.gtaPath) {
+            return { success: false, message: 'No hay ruta de GTA configurada.' };
+        }
 
-        send('download-progress', { percent: 95, message: 'Verificando archivos...' });
+        send('download-progress', { percent: 90, message: 'Verificando archivos instalados...' });
 
-        const { data: manifest } = await axios.get(GTA_MANIFEST_URL, { timeout: 8000 });
+        const { data: manifest } = await axios.get(GTA_MANIFEST_URL, { timeout: 15000 });
         if (!manifest || !manifest.files || !Array.isArray(manifest.files)) {
-            throw new Error('Manifest de verificación inválido');
+            throw new Error('No se pudo obtener el manifest de verificación');
         }
 
         const filesToUpdate = [];
         let totalUpdateSize = 0;
         let checkedFiles = 0;
+        const totalFiles = manifest.files.length;
+
+        console.log(`Verificando ${totalFiles} archivos después de extracción...`);
 
         for (const fileInfo of manifest.files) {
             checkedFiles++;
             const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
 
-            if (checkedFiles % 100 === 0) {
-                const progress = 95 + Math.round((checkedFiles / manifest.files.length) * 5);
+            // Actualizar progreso cada 50 archivos
+            if (checkedFiles % 50 === 0) {
+                const progress = 90 + Math.round((checkedFiles / totalFiles) * 8);
                 send('download-progress', {
                     percent: progress,
-                    message: `Verificando ${checkedFiles}/${manifest.files.length}...`
+                    message: `Verificando ${checkedFiles}/${totalFiles}...`
                 });
             }
 
-            if (!fs.existsSync(localPath) || fs.statSync(localPath).size !== fileInfo.size) {
+            // Si no existe
+            if (!fs.existsSync(localPath)) {
+                console.log(`Falta archivo: ${fileInfo.path}`);
+                filesToUpdate.push(fileInfo);
+                totalUpdateSize += fileInfo.size || 0;
+                continue;
+            }
+
+            // Verificar tamaño
+            const stats = fs.statSync(localPath);
+            if (stats.size !== fileInfo.size) {
+                console.log(`Tamaño incorrecto: ${fileInfo.path}`);
+                filesToUpdate.push(fileInfo);
+                totalUpdateSize += fileInfo.size || 0;
+                continue;
+            }
+
+            // SIEMPRE verificar hash
+            const localHash = await sha256File(localPath);
+            if (!localHash || localHash.toLowerCase() !== fileInfo.hash.toLowerCase()) {
+                console.log(`Hash incorrecto: ${fileInfo.path}`);
                 filesToUpdate.push(fileInfo);
                 totalUpdateSize += fileInfo.size || 0;
             }
         }
 
         if (filesToUpdate.length > 0) {
-            console.log(`Verificación encontró ${filesToUpdate.length} archivos faltantes o corruptos.`);
-            send('game-update', {
-                state: 'available',
-                filesCount: filesToUpdate.length,
-                totalSize: totalUpdateSize
+            console.log(`Se encontraron ${filesToUpdate.length} archivos para reparar (${formatBytes(totalUpdateSize)})`);
+
+            send('download-progress', {
+                percent: 98,
+                message: `Reparando ${filesToUpdate.length} archivos...`
             });
 
             await downloadFilesParallel(filesToUpdate, 5);
         }
 
+        // Guardar versión si existe en manifest
         if (manifest.version) {
             setLocalGameVersion(manifest.version);
         }
@@ -986,7 +1105,7 @@ async function verifyGameFiles() {
         return { success: true };
 
     } catch (e) {
-        console.error('Error durante la verificación de archivos:', e);
+        console.error('Error durante la verificación:', e);
         send('download-error', `Error de verificación: ${e.message}`);
         return { success: false, message: e.message };
     }
