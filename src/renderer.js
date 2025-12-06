@@ -515,6 +515,6 @@ if (nicknameInput) {
 
 // Configuración global del servidor (para copiar IP)
 const CONFIG = {
-    serverIP: '195.26.252.73',
-    serverPort: 7778
+    serverIP: '209.237.141.132',
+    serverPort: 7777
 };

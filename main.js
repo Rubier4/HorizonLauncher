@@ -35,7 +35,7 @@ const gameAPI = new GameAPI();
 // Configuración del servidor
 const CONFIG = {
     serverName: 'Horizon Roleplay',
-    serverIP: '195.26.252.73',
+    serverIP: '209.237.141.132',
     serverPort: 7777,
     website: 'https://horizonrp.es',
     discord: 'https://discord.gg/horizonrp',
@@ -538,32 +538,80 @@ async function initializeAPI() {
 }
 
 // Server/News
+// Variables globales para el estado del servidor
+let lastKnownServerState = null;
+let consecutiveFailures = 0;
+const MAX_FAILURES_BEFORE_OFFLINE = 3; // Necesita 3 fallos seguidos para marcar offline
+
 async function updateServerInfo() {
-    const serverOptions = { host: '195.26.252.73', port: 7777, timeout: 5000 };
-    const startTime = Date.now();
+    const serverOptions = { host: '209.237.141.132', port: 7777, timeout: 3000 };
 
-    query(serverOptions, (error, response) => {
-        const endTime = Date.now();
-        const calculatedPing = Math.round((endTime - startTime) / 3);
+    // Función para hacer una consulta con reintentos
+    const queryWithRetry = (retries = 2) => {
+        return new Promise((resolve) => {
+            const startTime = Date.now();
 
-        if (error) {
-            const serverInfo = { online: false, players: 0, maxPlayers: 500, ping: 0 };
-            if (mainWindow) mainWindow.webContents.send('server-info-update', serverInfo);
-            return;
+            query(serverOptions, (error, response) => {
+                const endTime = Date.now();
+                const calculatedPing = Math.round((endTime - startTime) / 3);
+
+                if (error) {
+                    if (retries > 0) {
+                        // Reintentar después de 1 segundo
+                        setTimeout(() => {
+                            queryWithRetry(retries - 1).then(resolve);
+                        }, 1000);
+                    } else {
+                        resolve({ success: false, error });
+                    }
+                } else {
+                    resolve({
+                        success: true,
+                        data: {
+                            online: true,
+                            players: response.online || 0,
+                            maxPlayers: response.maxplayers || 500,
+                            hostname: response.hostname || 'Horizon Roleplay',
+                            gamemode: response.gamemode || 'Roleplay',
+                            mapname: response.mapname || 'Los Santos',
+                            passworded: response.passworded || false,
+                            ping: response.ping > 0 ? response.ping : calculatedPing
+                        }
+                    });
+                }
+            });
+        });
+    };
+
+    const result = await queryWithRetry(2); // 3 intentos totales
+
+    if (result.success) {
+        // Éxito - resetear contador de fallos
+        consecutiveFailures = 0;
+        lastKnownServerState = result.data;
+
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('server-info-update', result.data);
         }
+    } else {
+        // Fallo
+        consecutiveFailures++;
+        console.warn(`Query fallida (${consecutiveFailures}/${MAX_FAILURES_BEFORE_OFFLINE})`);
 
-        const serverInfo = {
-            online: true,
-            players: response.online || 0,
-            maxPlayers: response.maxplayers || 500,
-            hostname: response.hostname || 'Horizon Roleplay',
-            gamemode: response.gamemode || 'Roleplay',
-            mapname: response.mapname || 'Los Santos',
-            passworded: response.passworded || false,
-            ping: response.ping > 0 ? response.ping : calculatedPing
-        };
-        if (mainWindow) mainWindow.webContents.send('server-info-update', serverInfo);
-    });
+        if (consecutiveFailures >= MAX_FAILURES_BEFORE_OFFLINE) {
+            // Solo marcar offline después de varios fallos consecutivos
+            const offlineInfo = { online: false, players: 0, maxPlayers: 500, ping: 0 };
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('server-info-update', offlineInfo);
+            }
+        } else if (lastKnownServerState) {
+            // Mantener el último estado conocido (con ping 0 para indicar problema)
+            const cachedInfo = { ...lastKnownServerState, ping: 0 };
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('server-info-update', cachedInfo);
+            }
+        }
+    }
 }
 
 async function updateNews() {
