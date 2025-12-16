@@ -29,6 +29,9 @@ document.querySelectorAll('.nav-item').forEach(item => {
             ipcRenderer.send('request-statistics');
         } else if (sectionId === 'home') {
             ipcRenderer.send('request-server-info');
+        } else if (sectionId === 'settings') {
+            // Cargar información de instalación
+            loadInstallInfo();
         }
     });
 });
@@ -553,11 +556,14 @@ window.addEventListener('DOMContentLoaded', async () => {
         const version = await ipcRenderer.invoke('app-version');
         const versionNode = document.getElementById('app-version');
         if (versionNode) versionNode.textContent = version;
+
+        // También actualizar en settings
+        const versionSettings = document.getElementById('launcher-version-settings');
+        if (versionSettings) versionSettings.textContent = version;
     } catch (e) {
         console.warn('No se pudo obtener versión:', e);
     }
 
-    // Cargar nickname guardado
     loadNickname();
 
     // Cargar ruta de instalación
@@ -568,7 +574,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             pathInput.value = installPath || 'No configurado';
         }
     } catch (e) {
-        console.warn('Error cargando ruta de instalación:', e);
+        console.warn('Error cargando ruta:', e);
     }
 
     ipcRenderer.send('request-server-info');
@@ -622,3 +628,47 @@ const CONFIG = {
     serverIP: '209.237.141.132',
     serverPort: 7777
 };
+
+async function loadInstallInfo() {
+    try {
+        const info = await ipcRenderer.invoke('get-install-info');
+
+        // Versión del launcher
+        const versionEl = document.getElementById('launcher-version-settings');
+        if (versionEl) {
+            versionEl.textContent = info.launcherVersion || '-';
+        }
+
+        // Tamaño de instalación
+        const sizeEl = document.getElementById('install-size');
+        if (sizeEl) {
+            if (info.installSize !== null) {
+                sizeEl.textContent = formatBytes(info.installSize);
+            } else if (info.isInstalled) {
+                sizeEl.textContent = 'Calculando...';
+            } else {
+                sizeEl.textContent = 'No instalado';
+            }
+        }
+
+        // Ruta de instalación
+        const pathEl = document.getElementById('install-path');
+        if (pathEl) {
+            pathEl.value = info.installPath;
+        }
+
+    } catch (e) {
+        console.error('Error cargando info de instalación:', e);
+    }
+}
+
+// ============================================
+// AÑADIR: Función formatBytes si no existe
+// ============================================
+function formatBytes(bytes) {
+    if (bytes === 0 || bytes === null) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}

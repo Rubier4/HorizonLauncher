@@ -1095,6 +1095,67 @@ ipcMain.handle('get-install-path', async () => {
     return CONFIG.gtaPath || 'No configurado';
 });
 
+// ============================================
+// AÑADIR: Handler para obtener información de instalación
+// ============================================
+ipcMain.handle('get-install-info', async () => {
+    try {
+        const info = {
+            launcherVersion: app.getVersion(),
+            installSize: null,
+            installPath: CONFIG.gtaPath || 'No configurado',
+            isInstalled: false
+        };
+
+        if (CONFIG.gtaPath && fs.existsSync(CONFIG.gtaPath)) {
+            info.isInstalled = true;
+
+            // Calcular tamaño de la instalación
+            const size = await getDirectorySize(CONFIG.gtaPath);
+            info.installSize = size;
+        }
+
+        return info;
+    } catch (e) {
+        console.error('Error obteniendo info de instalación:', e);
+        return {
+            launcherVersion: app.getVersion(),
+            installSize: null,
+            installPath: CONFIG.gtaPath || 'No configurado',
+            isInstalled: false
+        };
+    }
+});
+
+// ============================================
+// AÑADIR: Función para calcular tamaño de directorio
+// ============================================
+async function getDirectorySize(dirPath) {
+    let totalSize = 0;
+
+    try {
+        const items = await fs.readdir(dirPath, { withFileTypes: true });
+
+        for (const item of items) {
+            const itemPath = path.join(dirPath, item.name);
+
+            if (item.isDirectory()) {
+                totalSize += await getDirectorySize(itemPath);
+            } else if (item.isFile()) {
+                try {
+                    const stats = await fs.stat(itemPath);
+                    totalSize += stats.size;
+                } catch {
+                    // Ignorar archivos que no se pueden leer
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('Error calculando tamaño de:', dirPath, e.message);
+    }
+
+    return totalSize;
+}
 
 ipcMain.handle('verify-files', async () => {
     const send = (ch, payload) => {
