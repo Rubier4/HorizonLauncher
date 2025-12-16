@@ -3,42 +3,341 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Buscando actualizaciones...</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Horizon RP Launcher</title>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: transparent;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
-            text-align: center;
-            color: #fff;
-            background-color: #1a1a1a;
-            font-family: 'Bebas Neue', sans-serif;
             -webkit-app-region: drag;
+            user-select: none;
         }
 
-        .container {
-            padding: 30px;
+        .update-container {
+            width: 400px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow:
+                0 20px 60px rgba(0, 0, 0, 0.5),
+                0 0 0 1px rgba(255, 255, 255, 0.1);
+            position: relative;
         }
 
-        h2 {
-            font-size: 2.5em;
+        .update-content {
+            padding: 40px 30px 50px;
+            text-align: center;
+        }
+
+        .logo {
+            width: 60px;
+            height: 60px;
+            margin-bottom: 20px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.05);
+                opacity: 0.8;
+            }
+        }
+
+        .title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 28px;
+            color: #ffffff;
+            letter-spacing: 3px;
+            margin-bottom: 8px;
+        }
+
+        .message {
+            font-size: 14px;
+            color: #a0a0a0;
+            margin-bottom: 15px;
+            min-height: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .version-info {
+            font-size: 12px;
+            color: #6a6a8a;
             margin-bottom: 10px;
+        }
+
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #6a6a8a;
+            margin-bottom: 5px;
+            padding: 0 5px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .progress-info.visible {
+            opacity: 1;
+        }
+
+        /* Barra de progreso en el borde inferior */
+        .progress-bar-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #00ff88, #00cc6a);
+            box-shadow: 0 0 10px #00ff88, 0 0 20px rgba(0, 255, 136, 0.5);
+            transition: width 0.3s ease;
+            position: relative;
+        }
+
+        .progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg,
+                    transparent,
+                    rgba(255, 255, 255, 0.4),
+                    transparent);
+            animation: shimmer 1.5s infinite;
+        }
+
+        @keyframes shimmer {
+            0% {
+                transform: translateX(-100%);
+            }
+
+            100% {
+                transform: translateX(100%);
+            }
+        }
+
+        /* Estado de checking (animación de carga) */
+        .progress-bar.checking {
+            width: 100%;
+            background: linear-gradient(90deg,
+                    transparent,
+                    rgba(0, 255, 136, 0.3),
+                    transparent);
+            animation: loading 1.5s ease-in-out infinite;
+        }
+
+        @keyframes loading {
+            0% {
+                transform: translateX(-100%);
+            }
+
+            100% {
+                transform: translateX(100%);
+            }
+        }
+
+        /* Spinner para estado de checking */
+        .spinner {
+            display: none;
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #00ff88;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        .spinner.visible {
+            display: block;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Icono de check para completado */
+        .check-icon {
+            display: none;
+            width: 30px;
+            height: 30px;
+            margin: 0 auto 15px;
+            color: #00ff88;
+        }
+
+        .check-icon.visible {
+            display: block;
+            animation: checkIn 0.5s ease;
+        }
+
+        @keyframes checkIn {
+            0% {
+                transform: scale(0);
+                opacity: 0;
+            }
+
+            50% {
+                transform: scale(1.2);
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* Error state */
+        .error .progress-bar {
+            background: linear-gradient(90deg, #ff4444, #cc3333);
+            box-shadow: 0 0 10px #ff4444;
+        }
+
+        .error .message {
+            color: #ff6b6b;
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <h2 id="message">Buscando actualizaciones...</h2>
+    <div class="update-container" id="container">
+        <div class="update-content">
+            <img src="../assets/logo.ico" alt="Logo" class="logo">
+            <h1 class="title">HORIZON ROLEPLAY</h1>
+
+            <div class="spinner" id="spinner"></div>
+            <svg class="check-icon" id="checkIcon" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+            </svg>
+
+            <p class="message" id="message">Iniciando...</p>
+            <p class="version-info" id="versionInfo"></p>
+
+            <div class="progress-info" id="progressInfo">
+                <span id="progressSpeed">0 KB/s</span>
+                <span id="progressSize">0 / 0 MB</span>
+            </div>
+        </div>
+
+        <div class="progress-bar-container">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
     </div>
+
     <script>
         const { ipcRenderer } = require('electron');
-        ipcRenderer.on('update-message', (event, message) => {
-            const h2 = document.getElementById('message');
-            if (h2) h2.textContent = message;
+
+        const container = document.getElementById('container');
+        const message = document.getElementById('message');
+        const versionInfo = document.getElementById('versionInfo');
+        const progressBar = document.getElementById('progressBar');
+        const progressInfo = document.getElementById('progressInfo');
+        const progressSpeed = document.getElementById('progressSpeed');
+        const progressSize = document.getElementById('progressSize');
+        const spinner = document.getElementById('spinner');
+        const checkIcon = document.getElementById('checkIcon');
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatSpeed(bytesPerSecond) {
+            return formatBytes(bytesPerSecond) + '/s';
+        }
+
+        // Estado de actualización
+        ipcRenderer.on('update-status', (event, data) => {
+            switch (data.status) {
+                case 'checking':
+                    spinner.classList.add('visible');
+                    checkIcon.classList.remove('visible');
+                    message.textContent = data.message;
+                    progressBar.classList.add('checking');
+                    break;
+
+                case 'not-available':
+                    spinner.classList.remove('visible');
+                    checkIcon.classList.add('visible');
+                    message.textContent = data.message;
+                    progressBar.classList.remove('checking');
+                    progressBar.style.width = '100%';
+                    break;
+
+                case 'available':
+                    spinner.classList.add('visible');
+                    checkIcon.classList.remove('visible');
+                    message.textContent = 'Descargando actualización...';
+                    versionInfo.textContent = `Versión ${data.version}`;
+                    progressBar.classList.remove('checking');
+                    progressBar.style.width = '0%';
+                    progressInfo.classList.add('visible');
+                    break;
+
+                case 'downloaded':
+                    spinner.classList.remove('visible');
+                    checkIcon.classList.add('visible');
+                    message.textContent = data.message;
+                    progressBar.style.width = '100%';
+                    progressInfo.classList.remove('visible');
+                    break;
+            }
         });
+
+        // Progreso de descarga
+        ipcRenderer.on('update-progress', (event, data) => {
+            const percent = Math.round(data.percent);
+            progressBar.style.width = percent + '%';
+            progressSpeed.textContent = formatSpeed(data.bytesPerSecond);
+            progressSize.textContent = `${formatBytes(data.transferred)} / ${formatBytes(data.total)}`;
+            message.textContent = `Descargando... ${percent}%`;
+        });
+
+        // Error
+        ipcRenderer.on('update-error', (event, errorMessage) => {
+            container.classList.add('error');
+            spinner.classList.remove('visible');
+            message.textContent = 'Error: ' + errorMessage;
+            progressBar.style.width = '100%';
+        });
+
+        // Mensaje genérico (compatibilidad)
+        ipcRenderer.on('update-message', (event, msg) => {
+            message.textContent = msg;
+        });
+
+        // Iniciar con spinner visible
+        spinner.classList.add('visible');
+        message.textContent = 'Buscando actualizaciones...';
     </script>
 </body>
 

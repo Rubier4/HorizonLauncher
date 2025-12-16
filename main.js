@@ -11,6 +11,7 @@ const { autoUpdater } = require('electron-updater');
 const axios = require('axios');
 const crypto = require('crypto');
 const log = require('electron-log');
+const checkDiskSpace = require('check-disk-space').default;
 autoUpdater.logger = log;
 autoUpdater.logger.transports.file.level = 'info';
 
@@ -100,8 +101,41 @@ function sha256File(filePath) {
     });
 }
 
+async function checkAvailableSpace(requiredBytes, targetPath) {
+    try {
+        const diskPath = targetPath || CONFIG.gtaPath || app.getPath('documents');
+
+        // Asegurarse de que el path existe o usar el padre
+        let checkPath = diskPath;
+        while (!fs.existsSync(checkPath) && checkPath !== path.dirname(checkPath)) {
+            checkPath = path.dirname(checkPath);
+        }
+
+        const diskInfo = await checkDiskSpace(checkPath);
+
+        // Requerir 10% extra de espacio
+        const requiredWithMargin = requiredBytes * 1.1;
+
+        if (diskInfo.free < requiredWithMargin) {
+            const needed = formatBytes(requiredWithMargin);
+            const available = formatBytes(diskInfo.free);
+            return {
+                success: false,
+                message: `Espacio insuficiente en disco. Necesitas ${needed}, disponible: ${available}`
+            };
+        }
+
+        return { success: true, free: diskInfo.free };
+    } catch (e) {
+        console.warn('No se pudo verificar espacio en disco:', e.message);
+        // Si no podemos verificar, continuamos (mejor que bloquear)
+        return { success: true, free: 0 };
+    }
+}
+
 // Descarga paralela con control de concurrencia
-async function downloadFilesParallel(files, maxConcurrent = 3) {
+// Reemplazar downloadFilesParallel con esta versión mejorada
+async function downloadFilesParallel(files, maxConcurrent = 5) {
     const send = (ch, payload) => {
         try {
             if (mainWindow && !mainWindow.isDestroyed()) {
@@ -113,86 +147,46 @@ async function downloadFilesParallel(files, maxConcurrent = 3) {
     let completedFiles = 0;
     let failedFiles = [];
     const totalFiles = files.length;
-    let totalBytes = files.reduce((acc, f) => acc + (f.size || 0), 0);
+    const totalBytes = files.reduce((acc, f) => acc + (f.size || 0), 0);
     let downloadedBytes = 0;
+    let lastSpeedUpdate = Date.now();
+    let lastBytes = 0;
+    let currentSpeed = 0;
 
-    // Función para verificar si necesita descarga (SIEMPRE verifica hash)
-    const needsDownload = async (fileInfo) => {
-        const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
+    const updateProgress = (message, currentFile = '') => {
+        const now = Date.now();
+        const timeDiff = (now - lastSpeedUpdate) / 1000;
 
-        if (!fs.existsSync(localPath)) {
-            return { needs: true, reason: 'no existe' };
+        if (timeDiff >= 0.5) {
+            currentSpeed = (downloadedBytes - lastBytes) / timeDiff;
+            lastSpeedUpdate = now;
+            lastBytes = downloadedBytes;
         }
 
-        const stats = fs.statSync(localPath);
-        if (stats.size !== fileInfo.size) {
-            return { needs: true, reason: 'tamaño diferente' };
-        }
-
-        const currentHash = await sha256File(localPath);
-        if (!currentHash || currentHash.toLowerCase() !== fileInfo.hash.toLowerCase()) {
-            return { needs: true, reason: 'hash diferente' };
-        }
-
-        return { needs: false, reason: 'ok' };
+        send('download-progress', {
+            percent: Math.round((downloadedBytes / totalBytes) * 100),
+            message: message,
+            current: downloadedBytes,
+            total: totalBytes,
+            speed: currentSpeed,
+            filesCompleted: completedFiles,
+            filesTotal: totalFiles,
+            currentFile: currentFile
+        });
     };
 
-    // Función para descargar un archivo con reintentos
-    const downloadWithRetry = async (fileInfo, retries = 3) => {
-        for (let attempt = 1; attempt <= retries; attempt++) {
-            try {
-                const check = await needsDownload(fileInfo);
-                if (!check.needs) {
-                    console.log(`✓ Archivo OK, saltando: ${fileInfo.path}`);
-                    completedFiles++;
-                    downloadedBytes += fileInfo.size || 0;
-                    send('download-progress', {
-                        percent: Math.round((completedFiles / totalFiles) * 100),
-                        message: `Verificado ${completedFiles}/${totalFiles}: ${path.basename(fileInfo.path)}`,
-                        current: downloadedBytes,
-                        total: totalBytes
-                    });
-                    return true;
-                }
-
-                console.log(`Descargando ${fileInfo.path} (${check.reason}) - intento ${attempt}/${retries}`);
-                await downloadSingleFile(fileInfo);
-
-                // Verificar después de descargar
-                const verifyCheck = await needsDownload(fileInfo);
-                if (verifyCheck.needs) {
-                    throw new Error(`Verificación falló después de descargar: ${verifyCheck.reason}`);
-                }
-
-                completedFiles++;
-                console.log(`✓ Descargado ${completedFiles}/${totalFiles}: ${fileInfo.path}`);
-                return true;
-
-            } catch (error) {
-                console.error(`✗ Error en ${fileInfo.path}, intento ${attempt}:`, error.message);
-                if (attempt === retries) {
-                    failedFiles.push({ path: fileInfo.path, error: error.message });
-                    return false;
-                }
-                await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
-            }
-        }
-    };
-
-    // Función para descargar un solo archivo
     const downloadSingleFile = (fileInfo) => {
         return new Promise((resolve, reject) => {
             const localPath = path.join(CONFIG.gtaPath, fileInfo.path);
-            const localDir = path.dirname(localPath);
-            fs.ensureDirSync(localDir);
+            fs.ensureDirSync(path.dirname(localPath));
 
-            // Codificar URL correctamente para caracteres especiales
-            const encodedPath = fileInfo.path.split('/').map(part => encodeURIComponent(part)).join('/');
+            const encodedPath = fileInfo.path.split('/').map(encodeURIComponent).join('/');
             const fileUrl = `${CONFIG.baseDownloadURL}${encodedPath}`;
 
-            const file = fs.createWriteStream(localPath);
-            let timeout;
+            const tempPath = localPath + '.download';
+            const file = fs.createWriteStream(tempPath);
             let fileBytes = 0;
+            let timeout;
 
             const cleanup = () => {
                 clearTimeout(timeout);
@@ -201,99 +195,111 @@ async function downloadFilesParallel(files, maxConcurrent = 3) {
 
             const handleError = (err) => {
                 cleanup();
-                try { fs.unlinkSync(localPath); } catch { }
+                try { fs.unlinkSync(tempPath); } catch { }
                 reject(err);
             };
 
             const resetTimeout = () => {
                 clearTimeout(timeout);
-                timeout = setTimeout(() => handleError(new Error('Timeout de descarga')), 60000);
+                // Timeout dinámico basado en tamaño del archivo
+                const timeoutMs = Math.max(30000, Math.min(300000, fileInfo.size / 1000));
+                timeout = setTimeout(() => handleError(new Error('Timeout')), timeoutMs);
             };
 
-            const handleResponse = (res) => {
-                if (res.statusCode !== 200) {
-                    return handleError(new Error(`HTTP ${res.statusCode}`));
+            const makeRequest = (url, redirectCount = 0) => {
+                if (redirectCount > 5) {
+                    return handleError(new Error('Demasiadas redirecciones'));
                 }
 
-                res.on('data', (chunk) => {
-                    resetTimeout();
-                    fileBytes += chunk.length;
-                    downloadedBytes += chunk.length;
-
-                    send('download-progress', {
-                        percent: Math.round((completedFiles / totalFiles) * 100),
-                        message: `Descargando ${completedFiles + 1}/${totalFiles}: ${path.basename(fileInfo.path)}`,
-                        current: downloadedBytes,
-                        total: totalBytes
-                    });
-                });
-
-                res.pipe(file);
-
-                file.on('finish', () => {
-                    cleanup();
-                    resolve();
-                });
-
-                file.on('error', handleError);
-                res.on('error', handleError);
-            };
-
-            const makeRequest = (url) => {
                 resetTimeout();
 
                 const request = https.get(url, (response) => {
-                    // Manejar redirecciones
                     if ([301, 302, 303, 307, 308].includes(response.statusCode)) {
-                        const redirectUrl = response.headers.location;
-                        if (redirectUrl) {
-                            console.log(`Redirigiendo a: ${redirectUrl}`);
-                            makeRequest(redirectUrl);
+                        if (response.headers.location) {
+                            makeRequest(response.headers.location, redirectCount + 1);
                         } else {
                             handleError(new Error('Redirección sin URL'));
                         }
                         return;
                     }
-                    handleResponse(response);
+
+                    if (response.statusCode !== 200) {
+                        return handleError(new Error(`HTTP ${response.statusCode}`));
+                    }
+
+                    response.on('data', (chunk) => {
+                        resetTimeout();
+                        fileBytes += chunk.length;
+                        downloadedBytes += chunk.length;
+                        updateProgress(`Descargando...`, fileInfo.path);
+                    });
+
+                    response.pipe(file);
+
+                    file.on('finish', () => {
+                        cleanup();
+                        // Renombrar de .download a archivo final
+                        try {
+                            if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+                            fs.renameSync(tempPath, localPath);
+                            resolve();
+                        } catch (e) {
+                            reject(e);
+                        }
+                    });
+
+                    file.on('error', handleError);
+                    response.on('error', handleError);
                 });
 
                 request.on('error', handleError);
-                request.on('timeout', () => {
-                    request.destroy();
-                    handleError(new Error('Timeout de conexión'));
-                });
             };
 
             makeRequest(fileUrl);
         });
     };
 
-    console.log(`=== Iniciando descarga de ${files.length} archivos ===`);
-
-    // Procesar en lotes
-    for (let i = 0; i < files.length; i += maxConcurrent) {
-        const batch = files.slice(i, i + maxConcurrent);
-        const batchNum = Math.floor(i / maxConcurrent) + 1;
-        const totalBatches = Math.ceil(files.length / maxConcurrent);
-
-        console.log(`Procesando lote ${batchNum}/${totalBatches}`);
-        await Promise.all(batch.map(f => downloadWithRetry(f, 3)));
-
-        // Pequeña pausa entre lotes
-        if (i + maxConcurrent < files.length) {
-            await new Promise(resolve => setTimeout(resolve, 300));
+    const downloadWithRetry = async (fileInfo, retries = 3) => {
+        for (let attempt = 1; attempt <= retries; attempt++) {
+            try {
+                await downloadSingleFile(fileInfo);
+                completedFiles++;
+                return true;
+            } catch (error) {
+                console.error(`Error ${fileInfo.path} (${attempt}/${retries}):`, error.message);
+                if (attempt === retries) {
+                    failedFiles.push({ path: fileInfo.path, error: error.message });
+                    return false;
+                }
+                await new Promise(r => setTimeout(r, 2000 * attempt));
+            }
         }
+    };
+
+    console.log(`=== Descargando ${files.length} archivos (${formatBytes(totalBytes)}) ===`);
+
+    // Pool de workers
+    const queue = [...files];
+    const workers = [];
+
+    for (let i = 0; i < maxConcurrent; i++) {
+        workers.push((async () => {
+            while (queue.length > 0) {
+                const file = queue.shift();
+                if (file) await downloadWithRetry(file);
+            }
+        })());
     }
 
+    await Promise.all(workers);
+
     if (failedFiles.length > 0) {
-        console.error(`=== ${failedFiles.length} archivos fallaron ===`);
-        failedFiles.forEach(f => console.error(`  - ${f.path}: ${f.error}`));
+        console.error(`${failedFiles.length} archivos fallaron`);
         throw new Error(`No se pudieron descargar ${failedFiles.length} archivos`);
     }
 
-    console.log(`=== Descarga completa: ${completedFiles} archivos ===`);
+    console.log(`=== Descarga completa ===`);
 }
-
 // Auto-update del juego mejorado
 async function initGameAutoUpdate() {
     try {
@@ -455,59 +461,96 @@ function startMainApp() {
     createWindow();
 }
 
+// ============================================
+// REEMPLAZAR: initLauncherAutoUpdate completo
+// ============================================
 function initLauncherAutoUpdate() {
     log.info('Initializing launcher auto update...');
+
+    // Configurar para descargar más rápido
+    autoUpdater.autoDownload = false; // Controlamos manualmente
+    autoUpdater.autoInstallOnAppQuit = true;
+
     autoUpdater.on('error', (error) => {
         log.error('Update error:', error == null ? "unknown" : (error.stack || error).toString());
-        startMainApp();
+
+        if (checkingUpdatesWindow && !checkingUpdatesWindow.isDestroyed()) {
+            checkingUpdatesWindow.webContents.send('update-error', error?.message || 'Error desconocido');
+        }
+
+        // Esperar un poco y continuar a la app
+        setTimeout(() => startMainApp(), 2000);
+    });
+
+    autoUpdater.on('checking-for-update', () => {
+        log.info('Checking for updates...');
+        if (checkingUpdatesWindow && !checkingUpdatesWindow.isDestroyed()) {
+            checkingUpdatesWindow.webContents.send('update-status', {
+                status: 'checking',
+                message: 'Buscando actualizaciones...'
+            });
+        }
     });
 
     autoUpdater.on('update-not-available', () => {
         log.info('Update not available.');
-        startMainApp();
+        if (checkingUpdatesWindow && !checkingUpdatesWindow.isDestroyed()) {
+            checkingUpdatesWindow.webContents.send('update-status', {
+                status: 'not-available',
+                message: 'Launcher actualizado'
+            });
+        }
+        setTimeout(() => startMainApp(), 500);
     });
 
-    autoUpdater.on('update-available', () => {
-        log.info('Update available, starting download...');
-        if (checkingUpdatesWindow) {
-            checkingUpdatesWindow.webContents.send('update-message', 'Descargando actualización...');
+    autoUpdater.on('update-available', (info) => {
+        log.info('Update available:', info.version);
+
+        if (checkingUpdatesWindow && !checkingUpdatesWindow.isDestroyed()) {
+            checkingUpdatesWindow.webContents.send('update-status', {
+                status: 'available',
+                message: `Nueva versión ${info.version} disponible`,
+                version: info.version
+            });
+        }
+
+        // Iniciar descarga manualmente
+        autoUpdater.downloadUpdate();
+    });
+
+    autoUpdater.on('download-progress', (progress) => {
+        log.info(`Download progress: ${progress.percent.toFixed(1)}%`);
+
+        if (checkingUpdatesWindow && !checkingUpdatesWindow.isDestroyed()) {
+            checkingUpdatesWindow.webContents.send('update-progress', {
+                percent: progress.percent,
+                bytesPerSecond: progress.bytesPerSecond,
+                transferred: progress.transferred,
+                total: progress.total
+            });
         }
     });
 
-    autoUpdater.on('update-downloaded', () => {
-        log.info('Update downloaded, showing update window.');
+    autoUpdater.on('update-downloaded', (info) => {
+        log.info('Update downloaded:', info.version);
 
-        if (checkingUpdatesWindow) {
-            checkingUpdatesWindow.close();
+        if (checkingUpdatesWindow && !checkingUpdatesWindow.isDestroyed()) {
+            checkingUpdatesWindow.webContents.send('update-status', {
+                status: 'downloaded',
+                message: 'Instalando actualización...'
+            });
         }
-        if (mainWindow) {
-            mainWindow.close();
-        }
 
-        updateWindow = new BrowserWindow({
-            width: 450,
-            height: 250,
-            frame: false,
-            resizable: false,
-            movable: true,
-            transparent: true,
-            backgroundColor: '#00000000',
-            alwaysOnTop: true,
-            center: true,
-            webPreferences: {
-                nodeIntegration: true,
-                contextIsolation: false
-            }
-        });
-
-        updateWindow.loadFile('src/update.html');
-
-        updateWindow.on('closed', () => {
-            updateWindow = null;
-        });
-
+        // Pequeña pausa para que el usuario vea el mensaje
         setTimeout(() => {
-            if (!updateWindow) return;
+            // Cerrar ventanas
+            if (checkingUpdatesWindow && !checkingUpdatesWindow.isDestroyed()) {
+                checkingUpdatesWindow.close();
+            }
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.close();
+            }
+
             log.info('Quitting and installing update...');
             try {
                 autoUpdater.quitAndInstall(true, true);
@@ -515,9 +558,10 @@ function initLauncherAutoUpdate() {
                 log.error('Error during quitAndInstall:', e);
                 app.quit();
             }
-        }, 5000);
+        }, 1500);
     });
 
+    // Iniciar verificación
     try {
         autoUpdater.checkForUpdates();
     } catch (e) {
@@ -824,6 +868,53 @@ async function extractZip(source, dest, onProgress) {
 
 // IPC Handlers
 
+ipcMain.handle('select-install-path', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Seleccionar carpeta de instalación',
+        defaultPath: CONFIG.gtaPath || app.getPath('documents'),
+        properties: ['openDirectory', 'createDirectory'],
+        buttonLabel: 'Seleccionar esta carpeta'
+    });
+
+    if (result.canceled || !result.filePaths[0]) {
+        return { success: false, canceled: true };
+    }
+
+    const selectedPath = result.filePaths[0];
+
+    // Crear subcarpeta "GTA Horizon" dentro de la seleccionada
+    const gtaPath = path.join(selectedPath, 'GTA Horizon');
+
+    // Verificar espacio en disco (estimamos ~5GB para el juego)
+    const spaceCheck = await checkAvailableSpace(5 * 1024 * 1024 * 1024, selectedPath);
+    if (!spaceCheck.success) {
+        return { success: false, message: spaceCheck.message };
+    }
+
+    // Verificar permisos de escritura
+    try {
+        await fs.ensureDir(gtaPath);
+        const testFile = path.join(gtaPath, '.write_test');
+        fs.writeFileSync(testFile, 'test');
+        fs.unlinkSync(testFile);
+    } catch (e) {
+        return {
+            success: false,
+            message: 'No tienes permisos de escritura en esta carpeta. Selecciona otra ubicación.'
+        };
+    }
+
+    // Guardar la nueva ruta
+    CONFIG.gtaPath = gtaPath;
+    saveConfig();
+
+    return {
+        success: true,
+        path: gtaPath,
+        freeSpace: formatBytes(spaceCheck.free)
+    };
+});
+
 // Controles de ventana
 ipcMain.on('minimize-window', () => mainWindow.minimize());
 ipcMain.on('close-window', () => {
@@ -845,6 +936,22 @@ ipcMain.on('open-external', (e, url) => shell.openExternal(url));
 ipcMain.on('open-path', (e, folderPath) => {
     if (folderPath) {
         shell.openPath(folderPath);
+    }
+});
+
+ipcMain.on('open-install-folder', () => {
+    if (CONFIG.gtaPath && fs.existsSync(CONFIG.gtaPath)) {
+        shell.openPath(CONFIG.gtaPath);
+    } else if (CONFIG.gtaPath) {
+        // Si la ruta está configurada pero no existe, abrir la carpeta padre
+        const parentPath = path.dirname(CONFIG.gtaPath);
+        if (fs.existsSync(parentPath)) {
+            shell.openPath(parentPath);
+        } else {
+            shell.openPath(app.getPath('documents'));
+        }
+    } else {
+        shell.openPath(app.getPath('documents'));
     }
 });
 
@@ -881,14 +988,23 @@ ipcMain.on('start-game-with-nickname', async (event, nickname) => {
         // Guardar nickname en el registro
         await setNickname(nickname);
 
-        // Notificar que el juego está iniciando
-        if (mainWindow) mainWindow.webContents.send('game-starting');
-
         // Verificar si el juego está instalado
         const isInstalled = await checkGameInstalled();
+
         if (!isInstalled) {
+            // Si no hay ruta configurada, pedir selección
+            if (!CONFIG.gtaPath) {
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.webContents.send('request-install-path');
+                }
+                return;
+            }
+            // Hay ruta configurada, iniciar descarga
             downloadGame();
         } else {
+            // Notificar que el juego está iniciando
+            if (mainWindow) mainWindow.webContents.send('game-starting');
+
             const result = await launchGame();
             if (!result.success && mainWindow) {
                 mainWindow.webContents.send('game-error', result.message);
@@ -900,11 +1016,41 @@ ipcMain.on('start-game-with-nickname', async (event, nickname) => {
     }
 });
 
+ipcMain.on('start-download-with-path', async (event, selectedPath) => {
+    if (selectedPath) {
+        CONFIG.gtaPath = selectedPath;
+        saveConfig();
+    }
+    downloadGame(selectedPath);
+});
+
 // Obtener ruta instalación (para settings)
 ipcMain.on('get-installation-path', () => {
     if (mainWindow) {
         const displayPath = CONFIG.gtaPath || 'No instalado';
         mainWindow.webContents.send('installation-path', displayPath);
+    }
+});
+
+ipcMain.handle('check-existing-installation', async (_, checkPath) => {
+    try {
+        const gtaPath = path.join(checkPath, 'GTA Horizon');
+        const markerFile = path.join(gtaPath, '.horizonrp');
+
+        if (fs.existsSync(markerFile)) {
+            const gameFiles = findGameFiles(gtaPath);
+            if (gameFiles['gta_sa.exe'] && gameFiles['samp.exe']) {
+                return {
+                    exists: true,
+                    valid: true,
+                    path: gtaPath
+                };
+            }
+            return { exists: true, valid: false, path: gtaPath };
+        }
+        return { exists: false };
+    } catch (e) {
+        return { exists: false, error: e.message };
     }
 });
 
@@ -919,7 +1065,11 @@ ipcMain.handle('check-gta-installed', async () => {
     return !!(gameFiles['gta_sa.exe'] && gameFiles['samp.exe']);
 });
 
-ipcMain.handle('get-install-path', async () => CONFIG.gtaPath || 'No instalado');
+ipcMain.handle('get-install-path', async () => {
+    if (!CONFIG.gtaPath) loadConfig();
+    return CONFIG.gtaPath || 'No configurado';
+});
+
 
 ipcMain.handle('verify-files', async () => {
     const send = (ch, payload) => {
@@ -1047,11 +1197,23 @@ ipcMain.on('reset-installation', async () => {
 
 ipcMain.on('start-game', async () => {
     const isInstalled = await checkGameInstalled();
+
     if (!isInstalled) {
-        downloadGame();
+        // Si no está instalado, verificar si hay ruta configurada
+        if (!CONFIG.gtaPath) {
+            // Pedir al usuario que seleccione ruta primero
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('request-install-path');
+            }
+        } else {
+            // Hay ruta pero no está instalado, descargar
+            downloadGame();
+        }
     } else {
         const result = await launchGame();
-        if (!result.success && mainWindow) mainWindow.webContents.send('game-error', result.message);
+        if (!result.success && mainWindow) {
+            mainWindow.webContents.send('game-error', result.message);
+        }
     }
 });
 
@@ -1160,28 +1322,55 @@ async function verifyGameFiles() {
 }
 
 // downloadGame para usar HZGTA.zip
-async function downloadGame() {
+async function downloadGame(customPath = null) {
     const send = (ch, payload) => {
-        try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(ch, payload); } catch { }
+        try {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send(ch, payload);
+            }
+        } catch { }
     };
 
     if (downloadActive) {
-        send('download-error', 'Descarga ya en progreso');
+        send('download-error', 'Ya hay una descarga en progreso');
         return;
     }
-    if (!CONFIG.gtaPath) loadConfig();
-    await fs.ensureDir(CONFIG.gtaPath);
+
+    // Si se proporciona una ruta personalizada, usarla
+    if (customPath) {
+        CONFIG.gtaPath = customPath;
+        saveConfig();
+    }
+
+    // Si no hay ruta configurada, pedir al usuario que seleccione una
+    if (!CONFIG.gtaPath) {
+        send('request-install-path');
+        return;
+    }
+
     downloadActive = true;
 
     const zipUrl = 'https://pub-9d7e62ca68da4c1fb5a98f2a71cdf404.r2.dev/HZGTA.zip';
     const tempZipPath = path.join(app.getPath('temp'), 'HZGTA.zip');
 
     try {
+        send('download-progress', { percent: 0, message: 'Verificando espacio en disco...' });
+
+        // Verificar espacio en disco (ZIP ~4GB + extracción ~5GB = ~9GB necesarios)
+        const spaceCheck = await checkAvailableSpace(9 * 1024 * 1024 * 1024, CONFIG.gtaPath);
+        if (!spaceCheck.success) {
+            throw new Error(spaceCheck.message);
+        }
+
+        // Crear directorio de instalación
+        await fs.ensureDir(CONFIG.gtaPath);
+
         send('download-progress', { percent: 0, message: 'Preparando descarga...' });
 
+        // Descargar el ZIP
         await downloadFile(zipUrl, tempZipPath, (percent, current, total, speed) => {
             send('download-progress', {
-                percent: Math.round(percent * 0.8),
+                percent: Math.round(percent * 0.75), // 0-75% para descarga
                 message: 'Descargando GTA Horizon...',
                 current: current,
                 total: total,
@@ -1189,53 +1378,73 @@ async function downloadGame() {
             });
         });
 
-        send('download-progress', { percent: 80, message: 'Descarga completada. Extrayendo...' });
+        send('download-progress', { percent: 75, message: 'Descarga completada. Extrayendo archivos...' });
 
+        // Extraer el ZIP
         await extractZip(tempZipPath, CONFIG.gtaPath, (progress) => {
             send('download-progress', {
-                percent: 80 + Math.round(progress * 0.15),
+                percent: 75 + Math.round(progress * 0.15), // 75-90% para extracción
                 message: `Extrayendo archivos... (${progress}%)`
             });
         });
 
+        // Eliminar ZIP temporal
         try {
             await fs.unlink(tempZipPath);
+            console.log('ZIP temporal eliminado');
         } catch (e) {
-            console.warn("No se pudo borrar el zip temporal:", e.message);
+            console.warn("No se pudo borrar el ZIP temporal:", e.message);
         }
 
+        send('download-progress', { percent: 90, message: 'Verificando archivos instalados...' });
+
+        // Verificar archivos
         const verificationResult = await verifyGameFiles();
         if (!verificationResult.success) {
             throw new Error(verificationResult.message || 'La verificación de archivos falló.');
         }
 
+        // Crear archivo marcador de instalación
         const markerFile = path.join(CONFIG.gtaPath, '.horizonrp');
         fs.writeFileSync(markerFile, JSON.stringify({
             version: getLocalGameVersion(),
             server: CONFIG.serverName,
-            installedAt: new Date().toISOString()
-        }));
+            installedAt: new Date().toISOString(),
+            installPath: CONFIG.gtaPath
+        }, null, 2));
 
+        // Verificar que los archivos esenciales existen
         const gameFiles = findGameFiles(CONFIG.gtaPath);
         if (gameFiles['gta_sa.exe'] && gameFiles['samp.exe']) {
             saveConfig();
             downloadActive = false;
-            send('download-complete');
 
+            send('download-progress', { percent: 100, message: '¡Instalación completada!' });
+            send('download-complete');
+            send('installation-path', CONFIG.gtaPath);
+
+            // Iniciar el juego después de 2 segundos
             setTimeout(async () => {
                 const result = await launchGame();
-                if (!result.success) send('game-error', result.message);
+                if (!result.success) {
+                    send('game-error', result.message);
+                }
             }, 2000);
         } else {
-            throw new Error('Archivos de juego no encontrados tras la extracción.');
+            throw new Error('Archivos de juego no encontrados tras la extracción. Por favor, reinstala.');
         }
 
     } catch (error) {
         downloadActive = false;
+
+        // Limpiar ZIP temporal si existe
         if (fs.existsSync(tempZipPath)) {
-            try { await fs.unlink(tempZipPath); } catch { }
+            try {
+                await fs.unlink(tempZipPath);
+            } catch { }
         }
-        console.error('Error en la instalación desde ZIP:', error);
+
+        console.error('Error en la instalación:', error);
         send('download-error', error.message);
     }
 }

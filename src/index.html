@@ -225,19 +225,49 @@
                 <h2 class="section-title">Configuración del Launcher</h2>
                 <div class="settings-container">
                     <div class="setting-group">
-                        <h3>Ruta de instalación</h3>
+                        <h3>Ubicación del juego</h3>
+                        <p class="setting-description">Carpeta donde está instalado Horizon</p>
                         <div class="path-input">
-                            <input type="text" id="install-path" readonly>
-                            <button class="browse-btn">Examinar</button>
+                            <input type="text" id="install-path" readonly placeholder="No configurado">
+                            <button class="browse-btn" title="Abrir carpeta en explorador">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path
+                                        d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+                                </svg>
+                                Abrir
+                            </button>
                         </div>
                     </div>
+
                     <div class="setting-group">
-                        <button class="settings-btn danger" id="reset-install-btn">
-                            Reinstalar Juego
-                        </button>
-                        <button class="settings-btn" id="verify-files-btn">
-                            Verificar Archivos
-                        </button>
+                        <h3>Mantenimiento</h3>
+                        <div class="settings-buttons">
+                            <button class="settings-btn" id="verify-files-btn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                                </svg>
+                                Verificar Archivos
+                            </button>
+                            <button class="settings-btn danger" id="reset-install-btn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path
+                                        d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                                </svg>
+                                Reinstalar Juego
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="setting-group info">
+                        <h3>Información</h3>
+                        <div class="info-row">
+                            <span>Versión del launcher:</span>
+                            <span id="launcher-version-settings">-</span>
+                        </div>
+                        <div class="info-row">
+                            <span>Espacio ocupado:</span>
+                            <span id="install-size">-</span>
+                        </div>
                     </div>
                 </div>
             </section>

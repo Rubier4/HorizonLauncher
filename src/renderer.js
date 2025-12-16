@@ -4,7 +4,7 @@ const { ipcRenderer } = require('electron');
 let currentServerInfo = null;
 let currentStats = null;
 let currentNickname = '';
-
+let isSelectingPath = false;
 // Controles de ventana
 document.getElementById('minimize-btn').addEventListener('click', () => {
     ipcRenderer.send('minimize-window');
@@ -51,12 +51,66 @@ async function loadNickname() {
     ipcRenderer.send('get-nickname');
 }
 
+async function selectInstallPath() {
+    if (isSelectingPath) return;
+    isSelectingPath = true;
+
+    try {
+        const result = await ipcRenderer.invoke('select-install-path');
+
+        if (result.canceled) {
+            isSelectingPath = false;
+            return null;
+        }
+
+        if (!result.success) {
+            showNotification(result.message || 'Error al seleccionar la carpeta', 'error');
+            isSelectingPath = false;
+            return null;
+        }
+
+        // Actualizar UI con la nueva ruta
+        const pathInput = document.getElementById('install-path');
+        if (pathInput) {
+            pathInput.value = result.path;
+        }
+
+        showNotification(`Ruta seleccionada: ${result.path}`, 'success');
+        isSelectingPath = false;
+        return result.path;
+
+    } catch (error) {
+        console.error('Error seleccionando ruta:', error);
+        showNotification('Error al seleccionar la carpeta', 'error');
+        isSelectingPath = false;
+        return null;
+    }
+}
+
 // Recibir nickname actual
 ipcRenderer.on('nickname-current', (event, nickname) => {
     currentNickname = nickname || '';
     if (nicknameInput) {
         nicknameInput.value = currentNickname;
         updateNicknameUI();
+    }
+});
+
+ipcRenderer.on('request-install-path', async () => {
+    // Mostrar modal o diálogo para seleccionar ruta
+    const confirmed = confirm(
+        'Antes de descargar, selecciona dónde quieres instalar GTA Horizon.\n\n' +
+        'Se creará una carpeta "GTA Horizon" en la ubicación que elijas.\n\n' +
+        '¿Deseas continuar?'
+    );
+
+    if (!confirmed) return;
+
+    const selectedPath = await selectInstallPath();
+
+    if (selectedPath) {
+        // Iniciar descarga con la ruta seleccionada
+        ipcRenderer.send('start-download-with-path', selectedPath);
     }
 });
 
@@ -288,12 +342,46 @@ playBtn.addEventListener('click', async () => {
         nicknameInput.focus();
         nicknameInput.style.borderColor = 'var(--danger)';
 
-        // Hacer scroll al sidebar si es necesario
         const nicknameSection = document.querySelector('.nickname-section');
         if (nicknameSection) {
             nicknameSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
         return;
+    }
+
+    // Verificar si el juego está instalado
+    const isInstalled = await ipcRenderer.invoke('check-gta-installed');
+
+    if (!isInstalled) {
+        // Verificar si hay ruta configurada
+        const currentPath = await ipcRenderer.invoke('get-install-path');
+
+        if (!currentPath || currentPath === 'No configurado') {
+            // Pedir selección de ruta primero
+            const confirmed = confirm(
+                '¡Bienvenido a Horizon Roleplay!\n\n' +
+                'Antes de descargar el juego, selecciona dónde quieres instalarlo.\n\n' +
+                'Necesitarás aproximadamente 5 GB de espacio libre.'
+            );
+
+            if (!confirmed) return;
+
+            const selectedPath = await selectInstallPath();
+            if (!selectedPath) return;
+
+            // Guardar nickname y empezar descarga
+            if (nickname !== currentNickname) {
+                try {
+                    await ipcRenderer.invoke('save-nickname', nickname);
+                    currentNickname = nickname;
+                } catch (error) {
+                    console.error('Error guardando nickname:', error);
+                }
+            }
+
+            ipcRenderer.send('start-download-with-path', selectedPath);
+            return;
+        }
     }
 
     // Guardar nickname si cambió
@@ -317,17 +405,24 @@ ipcRenderer.on('game-starting', () => {
     showNotification('Iniciando el juego...', 'info');
 });
 
-function updatePlayButton(isInstalled) {
+async function updatePlayButton(isInstalled) {
     const playBtn = document.getElementById('play-btn');
     if (playBtn) {
-        const playText = playBtn.querySelector('.play-text');
+        const playText = playBtn.querySelector('.title');
         if (playText) {
             if (isInstalled) {
-                playText.textContent = 'JUGAR AHORA';
+                playText.textContent = 'JUGAR';
             } else {
                 playText.textContent = 'INSTALAR';
             }
         }
+    }
+
+    // También actualizar la ruta mostrada
+    const pathInput = document.getElementById('install-path');
+    if (pathInput) {
+        const currentPath = await ipcRenderer.invoke('get-install-path');
+        pathInput.value = currentPath || 'No configurado';
     }
 }
 
@@ -411,7 +506,9 @@ function openLink(url) {
 // Mostrar ruta de instalación
 ipcRenderer.on('installation-path', (event, installPath) => {
     const pathInput = document.getElementById('install-path');
-    if (pathInput) pathInput.value = installPath;
+    if (pathInput) {
+        pathInput.value = installPath || 'No configurado';
+    }
 });
 
 // Verificación de archivos
@@ -471,7 +568,17 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Cargar nickname guardado
     loadNickname();
 
-    ipcRenderer.send('get-installation-path');
+    // Cargar ruta de instalación
+    try {
+        const installPath = await ipcRenderer.invoke('get-install-path');
+        const pathInput = document.getElementById('install-path');
+        if (pathInput) {
+            pathInput.value = installPath || 'No configurado';
+        }
+    } catch (e) {
+        console.warn('Error cargando ruta de instalación:', e);
+    }
+
     ipcRenderer.send('request-server-info');
 
     try {
@@ -483,13 +590,18 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
+
 // Botón de "Examinar" para abrir la ruta de instalación
 const browseBtn = document.querySelector('.browse-btn');
 if (browseBtn) {
     browseBtn.addEventListener('click', () => {
         const installPath = document.getElementById('install-path').value;
-        if (installPath && installPath !== 'No instalado') {
-            ipcRenderer.send('open-path', installPath);
+
+        if (installPath && installPath !== 'No configurado' && installPath !== 'No instalado') {
+            // Abrir la carpeta de instalación
+            ipcRenderer.send('open-install-folder');
+        } else {
+            showNotification('El juego no está instalado todavía', 'info');
         }
     });
 }
