@@ -97,21 +97,7 @@ ipcRenderer.on('nickname-current', (event, nickname) => {
 });
 
 ipcRenderer.on('request-install-path', async () => {
-    // Mostrar modal o diálogo para seleccionar ruta
-    const confirmed = confirm(
-        'Antes de descargar, selecciona dónde quieres instalar GTA Horizon.\n\n' +
-        'Se creará una carpeta "GTA Horizon" en la ubicación que elijas.\n\n' +
-        '¿Deseas continuar?'
-    );
-
-    if (!confirmed) return;
-
-    const selectedPath = await selectInstallPath();
-
-    if (selectedPath) {
-        // Iniciar descarga con la ruta seleccionada
-        ipcRenderer.send('start-download-with-path', selectedPath);
-    }
+    await showInstallPathDialog();
 });
 
 // Actualizar UI del nickname
@@ -136,6 +122,40 @@ if (nicknameInput) {
     });
 }
 
+async function showInstallPathDialog() {
+    const confirmed = confirm(
+        '¡Bienvenido a Horizon Roleplay!\n\n' +
+        'Antes de descargar, elige dónde quieres instalar el juego.\n\n' +
+        'Se creará una carpeta "GTA Horizon" en la ubicación que elijas.\n' +
+        'Necesitarás aproximadamente 2 GB de espacio libre.\n\n' +
+        '¿Continuar?'
+    );
+
+    if (!confirmed) return false;
+
+    const result = await ipcRenderer.invoke('select-install-path');
+
+    if (result.canceled) {
+        return false;
+    }
+
+    if (!result.success) {
+        showNotification(result.message || 'Error al seleccionar la carpeta', 'error');
+        return false;
+    }
+
+    // Actualizar UI
+    const pathInput = document.getElementById('install-path');
+    if (pathInput) {
+        pathInput.value = result.path;
+    }
+
+    showNotification('Ubicación seleccionada. Iniciando descarga...', 'success');
+
+    // Iniciar descarga
+    ipcRenderer.send('start-download-with-path', result.path);
+    return true;
+}
 
 // Sistema de notificaciones simple
 function showNotification(message, type = 'info') {
@@ -331,57 +351,30 @@ const downloadSize = document.getElementById('download-size');
 playBtn.addEventListener('click', async () => {
     // Verificar servidor online
     if (currentServerInfo && !currentServerInfo.online) {
-        showNotification('El servidor está actualmente offline. Por favor, intenta más tarde.', 'error');
+        showNotification('El servidor está offline. Intenta más tarde.', 'error');
         return;
     }
 
     // Verificar nickname
     const nickname = nicknameInput.value.trim();
     if (!validateNickname(nickname)) {
-        showNotification('Por favor, ingresa un nickname válido (Nombre_Apellido)', 'error');
+        showNotification('Ingresa un nickname válido (Nombre_Apellido)', 'error');
         nicknameInput.focus();
         nicknameInput.style.borderColor = 'var(--danger)';
-
-        const nicknameSection = document.querySelector('.nickname-section');
-        if (nicknameSection) {
-            nicknameSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
         return;
     }
 
-    // Verificar si el juego está instalado
+    // Verificar si hay ruta de instalación
+    const hasPath = await ipcRenderer.invoke('has-install-path');
     const isInstalled = await ipcRenderer.invoke('check-gta-installed');
 
-    if (!isInstalled) {
-        // Verificar si hay ruta configurada
-        const currentPath = await ipcRenderer.invoke('get-install-path');
+    if (!isInstalled && !hasPath) {
+        // No hay instalación ni ruta, pedir que elija
+        const selected = await showInstallPathDialog();
+        if (!selected) return;
 
-        if (!currentPath || currentPath === 'No configurado') {
-            // Pedir selección de ruta primero
-            const confirmed = confirm(
-                '¡Bienvenido a Horizon Roleplay!\n\n' +
-                'Antes de descargar el juego, selecciona dónde quieres instalarlo.\n\n' +
-                'Necesitarás aproximadamente 5 GB de espacio libre.'
-            );
-
-            if (!confirmed) return;
-
-            const selectedPath = await selectInstallPath();
-            if (!selectedPath) return;
-
-            // Guardar nickname y empezar descarga
-            if (nickname !== currentNickname) {
-                try {
-                    await ipcRenderer.invoke('save-nickname', nickname);
-                    currentNickname = nickname;
-                } catch (error) {
-                    console.error('Error guardando nickname:', error);
-                }
-            }
-
-            ipcRenderer.send('start-download-with-path', selectedPath);
-            return;
-        }
+        // La descarga ya se inició en showInstallPathDialog
+        return;
     }
 
     // Guardar nickname si cambió
@@ -390,13 +383,12 @@ playBtn.addEventListener('click', async () => {
             await ipcRenderer.invoke('save-nickname', nickname);
             currentNickname = nickname;
         } catch (error) {
-            console.error('Error guardando nickname:', error);
             showNotification('Error al guardar el nickname', 'error');
             return;
         }
     }
 
-    // Iniciar el juego
+    // Iniciar juego
     ipcRenderer.send('start-game-with-nickname', nickname);
 });
 

@@ -3,7 +3,8 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Actualizando - Horizon RP</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Actualizando - Horizon Roleplay</title>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
     <style>
         * {
@@ -12,123 +13,61 @@
             box-sizing: border-box;
         }
 
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: transparent;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: transparent;
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
             -webkit-app-region: drag;
             user-select: none;
         }
 
-        .update-container {
-            width: 400px;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            border-radius: 16px;
+        .container {
+            width: 380px;
+            background: linear-gradient(145deg, #1e1e1e 0%, #141414 100%);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
             overflow: hidden;
-            box-shadow:
-                0 20px 60px rgba(0, 0, 0, 0.5),
-                0 0 0 1px rgba(255, 255, 255, 0.1);
             position: relative;
         }
 
-        .update-content {
-            padding: 40px 30px 50px;
+        .content {
+            padding: 35px 30px 45px;
             text-align: center;
         }
 
         .logo {
-            width: 60px;
-            height: 60px;
-            margin-bottom: 20px;
+            width: 50px;
+            height: 50px;
+            margin-bottom: 15px;
         }
 
         .title {
             font-family: 'Bebas Neue', sans-serif;
-            font-size: 28px;
+            font-size: 26px;
             color: #ffffff;
-            letter-spacing: 3px;
-            margin-bottom: 15px;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
         }
 
-        .message {
-            font-size: 14px;
-            color: #a0a0a0;
-            line-height: 1.6;
-        }
-
-        .countdown {
-            font-size: 24px;
-            color: #00ff88;
-            margin-top: 15px;
-            font-weight: bold;
-        }
-
-        /* Barra de progreso animada */
-        .progress-bar-container {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: rgba(255, 255, 255, 0.1);
-            overflow: hidden;
-        }
-
-        .progress-bar {
-            height: 100%;
-            width: 0%;
-            background: linear-gradient(90deg, #00ff88, #00cc6a);
-            box-shadow: 0 0 10px #00ff88, 0 0 20px rgba(0, 255, 136, 0.5);
-            animation: fillProgress 5s ease-out forwards;
-        }
-
-        @keyframes fillProgress {
-            0% {
-                width: 0%;
-            }
-
-            100% {
-                width: 100%;
-            }
-        }
-
-        .progress-bar::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(90deg,
-                    transparent,
-                    rgba(255, 255, 255, 0.4),
-                    transparent);
-            animation: shimmer 1s infinite;
-        }
-
-        @keyframes shimmer {
-            0% {
-                transform: translateX(-100%);
-            }
-
-            100% {
-                transform: translateX(100%);
-            }
-        }
-
-        /* Check icon */
         .check-icon {
-            width: 40px;
-            height: 40px;
-            margin: 0 auto 15px;
+            width: 28px;
+            height: 28px;
             color: #00ff88;
-            animation: checkPulse 1s ease infinite;
+            margin-bottom: 12px;
+            animation: pulse 1s ease infinite;
         }
 
-        @keyframes checkPulse {
+        @keyframes pulse {
 
             0%,
             100% {
@@ -139,42 +78,77 @@
                 transform: scale(1.1);
             }
         }
+
+        .message {
+            font-size: 13px;
+            color: #a0a0a0;
+            line-height: 1.5;
+        }
+
+        .countdown {
+            font-size: 20px;
+            color: #00ff88;
+            font-weight: bold;
+            margin-top: 12px;
+        }
+
+        .progress-bar-wrapper {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #00ff88, #00cc6a);
+            box-shadow: 0 0 8px #00ff88;
+            animation: fill 5s linear forwards;
+        }
+
+        @keyframes fill {
+            to {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 
 <body>
-    <div class="update-container">
-        <div class="update-content">
+    <div class="container">
+        <div class="content">
             <img src="../assets/logo.ico" alt="Logo" class="logo">
+            <h1 class="title">HORIZON ROLEPLAY</h1>
 
             <svg class="check-icon" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
             </svg>
 
-            <h1 class="title">¡ACTUALIZACIÓN LISTA!</h1>
             <p class="message">
-                El launcher se reiniciará automáticamente<br>
-                para instalar la nueva versión.
+                ¡Actualización lista!<br>
+                Reiniciando en...
             </p>
             <p class="countdown" id="countdown">5</p>
         </div>
 
-        <div class="progress-bar-container">
+        <div class="progress-bar-wrapper">
             <div class="progress-bar"></div>
         </div>
     </div>
 
     <script>
-        let seconds = 5;
-        const countdownEl = document.getElementById('countdown');
+        let count = 5;
+        const el = document.getElementById('countdown');
 
-        const interval = setInterval(() => {
-            seconds--;
-            countdownEl.textContent = seconds;
-
-            if (seconds <= 0) {
-                clearInterval(interval);
-                countdownEl.textContent = '...';
+        setInterval(() => {
+            count--;
+            if (count > 0) {
+                el.textContent = count;
+            } else {
+                el.textContent = '...';
             }
         }, 1000);
     </script>

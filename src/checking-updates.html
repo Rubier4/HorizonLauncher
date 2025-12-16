@@ -3,7 +3,8 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Horizon RP Launcher</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Horizon Roleplay</title>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
     <style>
         * {
@@ -12,169 +13,68 @@
             box-sizing: border-box;
         }
 
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: transparent;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: transparent;
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
             -webkit-app-region: drag;
             user-select: none;
         }
 
-        .update-container {
-            width: 400px;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            border-radius: 16px;
+        .container {
+            width: 380px;
+            background: linear-gradient(145deg, #1e1e1e 0%, #141414 100%);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
             overflow: hidden;
-            box-shadow:
-                0 20px 60px rgba(0, 0, 0, 0.5),
-                0 0 0 1px rgba(255, 255, 255, 0.1);
             position: relative;
         }
 
-        .update-content {
-            padding: 40px 30px 50px;
+        .content {
+            padding: 35px 30px 45px;
             text-align: center;
         }
 
         .logo {
-            width: 60px;
-            height: 60px;
-            margin-bottom: 20px;
-            animation: pulse 2s ease-in-out infinite;
-        }
-
-        @keyframes pulse {
-
-            0%,
-            100% {
-                transform: scale(1);
-                opacity: 1;
-            }
-
-            50% {
-                transform: scale(1.05);
-                opacity: 0.8;
-            }
+            width: 50px;
+            height: 50px;
+            margin-bottom: 15px;
         }
 
         .title {
             font-family: 'Bebas Neue', sans-serif;
-            font-size: 28px;
+            font-size: 26px;
             color: #ffffff;
-            letter-spacing: 3px;
-            margin-bottom: 8px;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
         }
 
-        .message {
-            font-size: 14px;
-            color: #a0a0a0;
-            margin-bottom: 15px;
-            min-height: 20px;
-            transition: all 0.3s ease;
-        }
-
-        .version-info {
-            font-size: 12px;
-            color: #6a6a8a;
-            margin-bottom: 10px;
-        }
-
-        .progress-info {
+        .status-container {
+            min-height: 60px;
             display: flex;
-            justify-content: space-between;
-            font-size: 11px;
-            color: #6a6a8a;
-            margin-bottom: 5px;
-            padding: 0 5px;
-            opacity: 0;
-            transition: opacity 0.3s ease;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
         }
 
-        .progress-info.visible {
-            opacity: 1;
-        }
-
-        /* Barra de progreso en el borde inferior */
-        .progress-bar-container {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: rgba(255, 255, 255, 0.1);
-            overflow: hidden;
-        }
-
-        .progress-bar {
-            height: 100%;
-            width: 0%;
-            background: linear-gradient(90deg, #00ff88, #00cc6a);
-            box-shadow: 0 0 10px #00ff88, 0 0 20px rgba(0, 255, 136, 0.5);
-            transition: width 0.3s ease;
-            position: relative;
-        }
-
-        .progress-bar::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(90deg,
-                    transparent,
-                    rgba(255, 255, 255, 0.4),
-                    transparent);
-            animation: shimmer 1.5s infinite;
-        }
-
-        @keyframes shimmer {
-            0% {
-                transform: translateX(-100%);
-            }
-
-            100% {
-                transform: translateX(100%);
-            }
-        }
-
-        /* Estado de checking (animación de carga) */
-        .progress-bar.checking {
-            width: 100%;
-            background: linear-gradient(90deg,
-                    transparent,
-                    rgba(0, 255, 136, 0.3),
-                    transparent);
-            animation: loading 1.5s ease-in-out infinite;
-        }
-
-        @keyframes loading {
-            0% {
-                transform: translateX(-100%);
-            }
-
-            100% {
-                transform: translateX(100%);
-            }
-        }
-
-        /* Spinner para estado de checking */
         .spinner {
-            display: none;
-            width: 30px;
-            height: 30px;
-            border: 3px solid rgba(255, 255, 255, 0.1);
+            width: 24px;
+            height: 24px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
             border-top-color: #00ff88;
             border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
-        }
-
-        .spinner.visible {
-            display: block;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 12px;
         }
 
         @keyframes spin {
@@ -183,161 +83,203 @@
             }
         }
 
-        /* Icono de check para completado */
-        .check-icon {
+        .spinner.hidden {
             display: none;
-            width: 30px;
-            height: 30px;
-            margin: 0 auto 15px;
+        }
+
+        .check-icon {
+            width: 24px;
+            height: 24px;
             color: #00ff88;
+            margin-bottom: 12px;
+            display: none;
         }
 
         .check-icon.visible {
             display: block;
-            animation: checkIn 0.5s ease;
+            animation: popIn 0.3s ease;
         }
 
-        @keyframes checkIn {
+        @keyframes popIn {
             0% {
                 transform: scale(0);
-                opacity: 0;
             }
 
-            50% {
+            70% {
                 transform: scale(1.2);
             }
 
             100% {
                 transform: scale(1);
-                opacity: 1;
             }
         }
 
-        /* Error state */
-        .error .progress-bar {
-            background: linear-gradient(90deg, #ff4444, #cc3333);
-            box-shadow: 0 0 10px #ff4444;
+        .message {
+            font-size: 13px;
+            color: #a0a0a0;
         }
 
-        .error .message {
-            color: #ff6b6b;
+        .version {
+            font-size: 11px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .progress-details {
+            font-size: 11px;
+            color: #666;
+            margin-top: 8px;
+            display: none;
+        }
+
+        .progress-details.visible {
+            display: block;
+        }
+
+        /* Barra de progreso inferior */
+        .progress-bar-wrapper {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #00ff88, #00cc6a);
+            box-shadow: 0 0 8px #00ff88;
+            transition: width 0.2s ease;
+        }
+
+        .progress-bar.indeterminate {
+            width: 30%;
+            animation: indeterminate 1.2s ease-in-out infinite;
+        }
+
+        @keyframes indeterminate {
+            0% {
+                transform: translateX(-100%);
+            }
+
+            100% {
+                transform: translateX(400%);
+            }
+        }
+
+        .progress-bar.complete {
+            width: 100%;
+        }
+
+        .progress-bar.error {
+            background: linear-gradient(90deg, #ff4444, #cc3333);
+            box-shadow: 0 0 8px #ff4444;
+            width: 100%;
         }
     </style>
 </head>
 
 <body>
-    <div class="update-container" id="container">
-        <div class="update-content">
+    <div class="container">
+        <div class="content">
             <img src="../assets/logo.ico" alt="Logo" class="logo">
             <h1 class="title">HORIZON ROLEPLAY</h1>
 
-            <div class="spinner" id="spinner"></div>
-            <svg class="check-icon" id="checkIcon" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-            </svg>
-
-            <p class="message" id="message">Iniciando...</p>
-            <p class="version-info" id="versionInfo"></p>
-
-            <div class="progress-info" id="progressInfo">
-                <span id="progressSpeed">0 KB/s</span>
-                <span id="progressSize">0 / 0 MB</span>
+            <div class="status-container">
+                <div class="spinner" id="spinner"></div>
+                <svg class="check-icon" id="checkIcon" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                </svg>
+                <p class="message" id="message">Buscando actualizaciones...</p>
+                <p class="version" id="version"></p>
+                <p class="progress-details" id="progressDetails">
+                    <span id="speed">0 KB/s</span> • <span id="size">0 / 0 MB</span>
+                </p>
             </div>
         </div>
 
-        <div class="progress-bar-container">
-            <div class="progress-bar" id="progressBar"></div>
+        <div class="progress-bar-wrapper">
+            <div class="progress-bar indeterminate" id="progressBar"></div>
         </div>
     </div>
 
     <script>
         const { ipcRenderer } = require('electron');
 
-        const container = document.getElementById('container');
-        const message = document.getElementById('message');
-        const versionInfo = document.getElementById('versionInfo');
-        const progressBar = document.getElementById('progressBar');
-        const progressInfo = document.getElementById('progressInfo');
-        const progressSpeed = document.getElementById('progressSpeed');
-        const progressSize = document.getElementById('progressSize');
         const spinner = document.getElementById('spinner');
         const checkIcon = document.getElementById('checkIcon');
+        const message = document.getElementById('message');
+        const version = document.getElementById('version');
+        const progressBar = document.getElementById('progressBar');
+        const progressDetails = document.getElementById('progressDetails');
+        const speed = document.getElementById('speed');
+        const size = document.getElementById('size');
 
         function formatBytes(bytes) {
-            if (bytes === 0) return '0 B';
+            if (!bytes || bytes === 0) return '0 B';
             const k = 1024;
             const sizes = ['B', 'KB', 'MB', 'GB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
         }
 
-        function formatSpeed(bytesPerSecond) {
-            return formatBytes(bytesPerSecond) + '/s';
-        }
-
-        // Estado de actualización
         ipcRenderer.on('update-status', (event, data) => {
             switch (data.status) {
                 case 'checking':
-                    spinner.classList.add('visible');
+                    spinner.classList.remove('hidden');
                     checkIcon.classList.remove('visible');
-                    message.textContent = data.message;
-                    progressBar.classList.add('checking');
+                    message.textContent = data.message || 'Buscando actualizaciones...';
+                    progressBar.className = 'progress-bar indeterminate';
                     break;
 
                 case 'not-available':
-                    spinner.classList.remove('visible');
+                    spinner.classList.add('hidden');
                     checkIcon.classList.add('visible');
-                    message.textContent = data.message;
-                    progressBar.classList.remove('checking');
-                    progressBar.style.width = '100%';
+                    message.textContent = 'Launcher actualizado';
+                    progressBar.className = 'progress-bar complete';
                     break;
 
                 case 'available':
-                    spinner.classList.add('visible');
+                    spinner.classList.remove('hidden');
                     checkIcon.classList.remove('visible');
                     message.textContent = 'Descargando actualización...';
-                    versionInfo.textContent = `Versión ${data.version}`;
-                    progressBar.classList.remove('checking');
+                    version.textContent = data.version ? `v${data.version}` : '';
+                    progressBar.className = 'progress-bar';
                     progressBar.style.width = '0%';
-                    progressInfo.classList.add('visible');
+                    progressDetails.classList.add('visible');
                     break;
 
                 case 'downloaded':
-                    spinner.classList.remove('visible');
+                    spinner.classList.add('hidden');
                     checkIcon.classList.add('visible');
-                    message.textContent = data.message;
-                    progressBar.style.width = '100%';
-                    progressInfo.classList.remove('visible');
+                    message.textContent = 'Instalando...';
+                    progressBar.className = 'progress-bar complete';
+                    progressDetails.classList.remove('visible');
                     break;
             }
         });
 
-        // Progreso de descarga
         ipcRenderer.on('update-progress', (event, data) => {
-            const percent = Math.round(data.percent);
+            const percent = Math.round(data.percent || 0);
             progressBar.style.width = percent + '%';
-            progressSpeed.textContent = formatSpeed(data.bytesPerSecond);
-            progressSize.textContent = `${formatBytes(data.transferred)} / ${formatBytes(data.total)}`;
             message.textContent = `Descargando... ${percent}%`;
+            speed.textContent = formatBytes(data.bytesPerSecond) + '/s';
+            size.textContent = `${formatBytes(data.transferred)} / ${formatBytes(data.total)}`;
         });
 
-        // Error
-        ipcRenderer.on('update-error', (event, errorMessage) => {
-            container.classList.add('error');
-            spinner.classList.remove('visible');
-            message.textContent = 'Error: ' + errorMessage;
-            progressBar.style.width = '100%';
+        ipcRenderer.on('update-error', (event, errorMsg) => {
+            spinner.classList.add('hidden');
+            message.textContent = 'Error al actualizar';
+            message.style.color = '#ff6b6b';
+            progressBar.className = 'progress-bar error';
         });
 
-        // Mensaje genérico (compatibilidad)
+        // Compatibilidad con mensaje simple
         ipcRenderer.on('update-message', (event, msg) => {
             message.textContent = msg;
         });
-
-        // Iniciar con spinner visible
-        spinner.classList.add('visible');
-        message.textContent = 'Buscando actualizaciones...';
     </script>
 </body>
 

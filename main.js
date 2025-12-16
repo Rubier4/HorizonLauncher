@@ -103,32 +103,26 @@ function sha256File(filePath) {
 
 async function checkAvailableSpace(requiredBytes, targetPath) {
     try {
-        const diskPath = targetPath || CONFIG.gtaPath || app.getPath('documents');
+        const checkDiskSpace = require('check-disk-space').default;
 
-        // Asegurarse de que el path existe o usar el padre
-        let checkPath = diskPath;
+        let checkPath = targetPath;
         while (!fs.existsSync(checkPath) && checkPath !== path.dirname(checkPath)) {
             checkPath = path.dirname(checkPath);
         }
 
         const diskInfo = await checkDiskSpace(checkPath);
-
-        // Requerir 10% extra de espacio
         const requiredWithMargin = requiredBytes * 1.1;
 
         if (diskInfo.free < requiredWithMargin) {
-            const needed = formatBytes(requiredWithMargin);
-            const available = formatBytes(diskInfo.free);
             return {
                 success: false,
-                message: `Espacio insuficiente en disco. Necesitas ${needed}, disponible: ${available}`
+                message: `Espacio insuficiente. Necesitas ${formatBytes(requiredWithMargin)}, disponible: ${formatBytes(diskInfo.free)}`
             };
         }
 
         return { success: true, free: diskInfo.free };
     } catch (e) {
-        console.warn('No se pudo verificar espacio en disco:', e.message);
-        // Si no podemos verificar, continuamos (mejor que bloquear)
+        console.warn('No se pudo verificar espacio:', e.message);
         return { success: true, free: 0 };
     }
 }
@@ -400,19 +394,23 @@ function loadConfig() {
     try {
         if (fs.existsSync(configPath)) {
             const saved = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-            if (saved.gtaPath && fs.existsSync(path.join(saved.gtaPath, '.horizonrp'))) {
-                CONFIG.gtaPath = saved.gtaPath;
-                console.log('✓ Instalación cargada:', CONFIG.gtaPath);
-                return;
+            if (saved.gtaPath && fs.existsSync(saved.gtaPath)) {
+                // Verificar que la instalación sigue siendo válida
+                const markerFile = path.join(saved.gtaPath, '.horizonrp');
+                if (fs.existsSync(markerFile)) {
+                    CONFIG.gtaPath = saved.gtaPath;
+                    console.log('✓ Instalación cargada:', CONFIG.gtaPath);
+                    return;
+                }
             }
         }
     } catch (e) {
         console.error('✗ Error cargando config:', e);
     }
 
-    CONFIG.gtaPath = path.join(app.getPath('documents'), 'GTA Horizon');
-    console.log('✓ Ruta de GTA en Documents:', CONFIG.gtaPath);
-    saveConfig();
+    // NO establecer ruta por defecto - dejar que el usuario elija
+    CONFIG.gtaPath = null;
+    console.log('✓ Sin instalación previa, el usuario deberá elegir ubicación');
 }
 
 function saveConfig() {
@@ -467,8 +465,8 @@ function startMainApp() {
 function initLauncherAutoUpdate() {
     log.info('Initializing launcher auto update...');
 
-    // Configurar para descargar más rápido
-    autoUpdater.autoDownload = false; // Controlamos manualmente
+    // Configurar para control manual de descarga
+    autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = true;
 
     autoUpdater.on('error', (error) => {
@@ -478,7 +476,6 @@ function initLauncherAutoUpdate() {
             checkingUpdatesWindow.webContents.send('update-error', error?.message || 'Error desconocido');
         }
 
-        // Esperar un poco y continuar a la app
         setTimeout(() => startMainApp(), 2000);
     });
 
@@ -514,7 +511,7 @@ function initLauncherAutoUpdate() {
             });
         }
 
-        // Iniciar descarga manualmente
+        // Iniciar descarga
         autoUpdater.downloadUpdate();
     });
 
@@ -534,23 +531,44 @@ function initLauncherAutoUpdate() {
     autoUpdater.on('update-downloaded', (info) => {
         log.info('Update downloaded:', info.version);
 
+        // Cerrar ventana de checking si existe
         if (checkingUpdatesWindow && !checkingUpdatesWindow.isDestroyed()) {
-            checkingUpdatesWindow.webContents.send('update-status', {
-                status: 'downloaded',
-                message: 'Instalando actualización...'
-            });
+            checkingUpdatesWindow.close();
+            checkingUpdatesWindow = null;
         }
 
-        // Pequeña pausa para que el usuario vea el mensaje
-        setTimeout(() => {
-            // Cerrar ventanas
-            if (checkingUpdatesWindow && !checkingUpdatesWindow.isDestroyed()) {
-                checkingUpdatesWindow.close();
-            }
-            if (mainWindow && !mainWindow.isDestroyed()) {
-                mainWindow.close();
-            }
+        // Cerrar ventana principal si existe
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.close();
+            mainWindow = null;
+        }
 
+        // Crear ventana de actualización lista
+        updateWindow = new BrowserWindow({
+            width: 400,
+            height: 220,
+            frame: false,
+            resizable: false,
+            movable: true,
+            transparent: true,
+            backgroundColor: '#00000000',
+            alwaysOnTop: true,
+            center: true,
+            skipTaskbar: false,
+            webPreferences: {
+                nodeIntegration: true,
+                contextIsolation: false
+            }
+        });
+
+        updateWindow.loadFile('src/update.html');
+
+        updateWindow.on('closed', () => {
+            updateWindow = null;
+        });
+
+        // Instalar después de mostrar la ventana
+        setTimeout(() => {
             log.info('Quitting and installing update...');
             try {
                 autoUpdater.quitAndInstall(true, true);
@@ -558,7 +576,7 @@ function initLauncherAutoUpdate() {
                 log.error('Error during quitAndInstall:', e);
                 app.quit();
             }
-        }, 1500);
+        }, 5000);
     });
 
     // Iniciar verificación
@@ -869,9 +887,11 @@ async function extractZip(source, dest, onProgress) {
 // IPC Handlers
 
 ipcMain.handle('select-install-path', async () => {
+    const defaultPath = app.getPath('documents');
+
     const result = await dialog.showOpenDialog(mainWindow, {
-        title: 'Seleccionar carpeta de instalación',
-        defaultPath: CONFIG.gtaPath || app.getPath('documents'),
+        title: 'Seleccionar carpeta para instalar GTA Horizon',
+        defaultPath: defaultPath,
         properties: ['openDirectory', 'createDirectory'],
         buttonLabel: 'Seleccionar esta carpeta'
     });
@@ -881,15 +901,7 @@ ipcMain.handle('select-install-path', async () => {
     }
 
     const selectedPath = result.filePaths[0];
-
-    // Crear subcarpeta "GTA Horizon" dentro de la seleccionada
     const gtaPath = path.join(selectedPath, 'GTA Horizon');
-
-    // Verificar espacio en disco (estimamos ~5GB para el juego)
-    const spaceCheck = await checkAvailableSpace(5 * 1024 * 1024 * 1024, selectedPath);
-    if (!spaceCheck.success) {
-        return { success: false, message: spaceCheck.message };
-    }
 
     // Verificar permisos de escritura
     try {
@@ -900,18 +912,29 @@ ipcMain.handle('select-install-path', async () => {
     } catch (e) {
         return {
             success: false,
-            message: 'No tienes permisos de escritura en esta carpeta. Selecciona otra ubicación.'
+            message: 'No tienes permisos para escribir en esta carpeta. Elige otra ubicación.'
         };
     }
 
-    // Guardar la nueva ruta
+    // Verificar espacio (necesitamos ~5GB)
+    try {
+        const spaceCheck = await checkAvailableSpace(5 * 1024 * 1024 * 1024, selectedPath);
+        if (!spaceCheck.success) {
+            // Limpiar carpeta creada
+            try { await fs.remove(gtaPath); } catch { }
+            return { success: false, message: spaceCheck.message };
+        }
+    } catch (e) {
+        console.warn('No se pudo verificar espacio:', e.message);
+    }
+
+    // Guardar la ruta
     CONFIG.gtaPath = gtaPath;
     saveConfig();
 
     return {
         success: true,
-        path: gtaPath,
-        freeSpace: formatBytes(spaceCheck.free)
+        path: gtaPath
     };
 });
 
@@ -985,24 +1008,26 @@ ipcMain.handle('save-nickname', async (event, nickname) => {
 // Nuevo handler para iniciar juego con nickname
 ipcMain.on('start-game-with-nickname', async (event, nickname) => {
     try {
-        // Guardar nickname en el registro
+        // Guardar nickname
         await setNickname(nickname);
 
         // Verificar si el juego está instalado
         const isInstalled = await checkGameInstalled();
 
         if (!isInstalled) {
-            // Si no hay ruta configurada, pedir selección
+            // Si no hay ruta configurada, pedir que elija
             if (!CONFIG.gtaPath) {
                 if (mainWindow && !mainWindow.isDestroyed()) {
                     mainWindow.webContents.send('request-install-path');
                 }
                 return;
             }
-            // Hay ruta configurada, iniciar descarga
+
+            // Hay ruta pero no está instalado, descargar
+            if (mainWindow) mainWindow.webContents.send('game-starting');
             downloadGame();
         } else {
-            // Notificar que el juego está iniciando
+            // Juego instalado, iniciar
             if (mainWindow) mainWindow.webContents.send('game-starting');
 
             const result = await launchGame();
@@ -1021,7 +1046,7 @@ ipcMain.on('start-download-with-path', async (event, selectedPath) => {
         CONFIG.gtaPath = selectedPath;
         saveConfig();
     }
-    downloadGame(selectedPath);
+    downloadGame();
 });
 
 // Obtener ruta instalación (para settings)
@@ -1172,6 +1197,11 @@ ipcMain.handle('verify-files', async () => {
         send('download-error', `Error: ${error.message}`);
         return false;
     }
+});
+
+ipcMain.handle('has-install-path', async () => {
+    if (!CONFIG.gtaPath) loadConfig();
+    return !!CONFIG.gtaPath;
 });
 
 ipcMain.on('reset-installation', async () => {
@@ -1516,8 +1546,8 @@ function formatBytes(bytes) {
 // Inicialización
 app.whenReady().then(() => {
     checkingUpdatesWindow = new BrowserWindow({
-        width: 450,
-        height: 250,
+        width: 400,
+        height: 220,  // Altura fija adecuada
         frame: false,
         resizable: false,
         movable: true,
@@ -1525,12 +1555,15 @@ app.whenReady().then(() => {
         backgroundColor: '#00000000',
         alwaysOnTop: true,
         center: true,
+        skipTaskbar: false,
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false,
         }
     });
+
     checkingUpdatesWindow.loadFile('src/checking-updates.html');
+
     checkingUpdatesWindow.on('closed', () => {
         checkingUpdatesWindow = null;
     });
