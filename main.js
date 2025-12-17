@@ -42,7 +42,7 @@ const CONFIG = {
     discord: 'https://discord.gg/horizonrp',
     forum: 'https://foro.horizonrp.es',
     wiki: 'https://wiki.horizonrp.es',
-    baseDownloadURL: 'https://pub-9d7e62ca68da4c1fb5a98f2a71cdf404.r2.dev/HZGTA2/',
+    baseDownloadURL: 'https://pub-9d7e62ca68da4c1fb5a98f2a71cdf404.r2.dev/HZGTA5/',
     gtaPath: null
 };
 
