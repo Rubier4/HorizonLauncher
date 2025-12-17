@@ -42,7 +42,7 @@ const CONFIG = {
     discord: 'https://discord.gg/horizonrp',
     forum: 'https://foro.horizonrp.es',
     wiki: 'https://wiki.horizonrp.es',
-    baseDownloadURL: 'https://pub-9d7e62ca68da4c1fb5a98f2a71cdf404.r2.dev/HZGTA/',
+    baseDownloadURL: 'https://pub-9d7e62ca68da4c1fb5a98f2a71cdf404.r2.dev/HZGTA2/',
     gtaPath: null
 };
 
@@ -1550,17 +1550,12 @@ async function launchGame() {
 
     try {
         await updateSAMPRegistry(gameFiles['gta_sa.exe']);
-        const launcherFlag = path.join(CONFIG.gtaPath, '.launcher_active');
-        fs.writeFileSync(launcherFlag, Date.now().toString());
         const gameCwd = path.dirname(gameFiles['samp.exe']);
         const gameProcess = spawn(gameFiles['samp.exe'], [`${CONFIG.serverIP}:${CONFIG.serverPort}`], {
             cwd: gameCwd,
             detached: true,
             stdio: 'ignore'
         });
-        setTimeout(() => {
-            try { fs.unlinkSync(launcherFlag); } catch { }
-        }, 10000);
 
         gameProcess.unref();
         setTimeout(() => mainWindow?.minimize(), 2000);
